@@ -46,12 +46,35 @@
   #tools .sep{width:1px;background:var(--border);margin:4px 5px;flex:0 0 auto}
   /* panes */
   #main{flex:1 1 auto;min-height:0;position:relative}
-  #src,#pv{position:absolute;inset:0;overflow:auto;-webkit-overflow-scrolling:touch}
-  #src{border:0;resize:none;width:100%;height:100%;background:var(--panel);color:var(--fg);
-       font-family:ui-monospace,Menlo,monospace;font-size:16px;line-height:1.6;padding:16px;outline:none;
-       white-space:pre-wrap;overflow-wrap:break-word}
+  #pv{position:absolute;inset:0;overflow:auto;-webkit-overflow-scrolling:touch}
+  /* styled live editor: transparent textarea over an aligned highlight layer.
+     BOTH must share identical typography or the caret drifts. */
+  #editorWrap{position:absolute;inset:0;overflow:auto;-webkit-overflow-scrolling:touch;background:var(--bg)}
+  #hl,#src{margin:0;border:0;width:100%;min-height:100%;
+       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:17px;line-height:1.65;
+       padding:16px 18px calc(40px + var(--safe-bot));
+       white-space:pre-wrap;overflow-wrap:break-word;word-break:break-word;
+       letter-spacing:normal;tab-size:2}
+  #hl{position:absolute;inset:0;pointer-events:none;color:var(--fg)}
+  #src{position:relative;background:transparent;resize:none;outline:none;
+       color:transparent;caret-color:var(--accent);-webkit-text-fill-color:transparent}
+  #src::placeholder{-webkit-text-fill-color:var(--muted);color:var(--muted)}
+  #hl:empty::before{content:"# Start typing…";color:var(--muted)}
+  /* inline styling tokens in the highlight layer */
+  #hl .mk{color:var(--muted);opacity:.55}                       /* the # ** etc markers, dimmed */
+  #hl .h1{font-weight:800;color:var(--head)}
+  #hl .h2{font-weight:800;color:var(--head)}
+  #hl .h3{font-weight:700;color:var(--head)}
+  #hl .b{font-weight:800;color:var(--head)}
+  #hl .i{font-style:italic}
+  #hl .s{text-decoration:line-through;color:var(--muted)}
+  #hl .code{font-family:ui-monospace,Menlo,monospace;background:var(--chip);border-radius:5px;padding:1px 4px}
+  #hl .lnk{color:var(--accent)}
+  #hl .q{color:var(--muted)}
+  #hl .li{color:var(--accent)}                                  /* the -, *, 1. bullet marker */
+  #hl .mark{background:var(--accent);color:#0b0b0b;border-radius:3px}
   #pv{padding:16px 18px calc(40px + var(--safe-bot));font-size:16px;line-height:1.6;display:none;overflow-wrap:break-word;word-break:break-word}
-  body.view-preview #src{display:none}
+  body.view-preview #editorWrap{display:none}
   body.view-preview #pv{display:block}
   #pv h1{font-size:1.8em;font-weight:700;margin:.2em 0 .4em;border-bottom:1px solid var(--border);padding-bottom:.3em}
   #pv h2{font-size:1.4em;font-weight:700;margin:1.1em 0 .45em;border-bottom:1px solid var(--border);padding-bottom:.25em}
@@ -92,15 +115,15 @@
     <button id="menuBtn" title="Menu"></button>
     <button id="newBtn" title="New document"></button>
     <div id="docname">Untitled</div>
-    <div id="seg">
-      <button id="segEdit" class="active">Edit</button>
-      <button id="segView">View</button>
-    </div>
+    <button id="previewBtn" title="Toggle rendered preview"></button>
     <button id="saveBtn" class="primary" title="Save / Export"></button>
   </div>
   <div id="tools"></div>
   <div id="main">
-    <textarea id="src" placeholder="# Start typing markdown…" autocapitalize="sentences" autocorrect="on"></textarea>
+    <div id="editorWrap">
+      <div id="hl" aria-hidden="true"></div>
+      <textarea id="src" autocapitalize="sentences" autocorrect="on" spellcheck="true"></textarea>
+    </div>
     <div id="pv"></div>
   </div>
 
