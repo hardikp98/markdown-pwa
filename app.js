@@ -124,7 +124,7 @@ function createNewDoc(){
 }
 
 /* ---------- top bar icons ---------- */
-$("#menuBtn").innerHTML=ic.menu; $("#docsBtn").innerHTML=ic.docs; $("#saveBtn").innerHTML=ic.save;
+$("#menuBtn").innerHTML=ic.menu; $("#saveBtn").innerHTML=ic.save;
 $("#newBtn").innerHTML=ic.plus; $("#newBtn").onclick=createNewDoc;
 // tap the title to rename the current doc
 docname.style.cursor="pointer"; docname.title="Tap to rename";
@@ -139,7 +139,6 @@ const scrim=$("#scrim");
 function openSheet(el){ persistActive(); scrim.classList.add("open"); el.classList.add("open"); if(el.id==="docsSheet") renderDocList(); }
 function closeSheets(){ scrim.classList.remove("open"); document.querySelectorAll(".sheet").forEach(s=>s.classList.remove("open")); }
 scrim.onclick=closeSheets;
-$("#docsBtn").onclick=()=>openSheet($("#docsSheet"));
 $("#menuBtn").onclick=()=>openSheet($("#menuSheet"));
 
 function renderDocList(){
@@ -225,11 +224,14 @@ function applyTheme(t){ document.documentElement.setAttribute("data-theme",t); $
 function renderMenu(){
   const m=$("#menuList");
   m.innerHTML =
+    `<div class="mRow" data-m="docs">${ic.docs}<span>Documents</span></div>`+
     `<div class="mRow" data-m="export">${ic.share}<span>Save / Share current doc</span></div>`+
     `<div class="mRow" data-m="import">${ic.download}<span>Import from Files</span></div>`+
     `<div class="mRow" data-m="theme">${ic.theme}<span>Theme: cycle</span></div>`;
   m.querySelectorAll("[data-m]").forEach(el=>el.onclick=()=>{
-    const a=el.dataset.m; closeSheets();
+    const a=el.dataset.m;
+    if(a==="docs"){ $("#menuSheet").classList.remove("open"); openSheet($("#docsSheet")); return; }
+    closeSheets();
     if(a==="export") saveDoc();
     else if(a==="import") $("#fileInput").click();
     else if(a==="theme"){ const cur=localStorage.getItem("mdpwa.theme")||""; const i=THEMES.findIndex(t=>t[0]===cur); applyTheme(THEMES[(i+1)%THEMES.length][0]); toast("Theme changed"); }
