@@ -114,8 +114,18 @@ const TOOLS=[["undo"],["redo"],["sep"],["h1"],["h2"],["bold"],["italic"],["strik
 $("#tools").innerHTML = TOOLS.map(t=> t[0]==="sep" ? '<span class="sep"></span>' : `<button data-act="${t[0]}">${ic[t[0]]}</button>`).join("");
 $("#tools").addEventListener("click",e=>{ const b=e.target.closest("[data-act]"); if(b&&ACT[b.dataset.act]) ACT[b.dataset.act](); });
 
+/* ---------- new document (one tap) ---------- */
+function createNewDoc(){
+  const n=docs.filter(d=>/^Untitled/.test(d.name||"")).length;
+  newDoc(n?`Untitled ${n+1}.md`:"Untitled.md","");
+  closeSheets(); document.body.classList.remove("view-preview");
+  $("#segEdit").classList.add("active"); $("#segView").classList.remove("active");
+  src.focus();
+}
+
 /* ---------- top bar icons ---------- */
 $("#menuBtn").innerHTML=ic.menu; $("#docsBtn").innerHTML=ic.docs; $("#saveBtn").innerHTML=ic.save;
+$("#newBtn").innerHTML=ic.plus; $("#newBtn").onclick=createNewDoc;
 // tap the title to rename the current doc
 docname.style.cursor="pointer"; docname.title="Tap to rename";
 docname.onclick=()=>{
@@ -146,12 +156,7 @@ function renderDocList(){
     html+=`<div class="docItem" data-id="${d.id}"><span>${(d.name||"Untitled")}</span><span class="meta">${fmt(d.updated)}${tag}</span><span class="dx" data-del="${d.id}">${ic.trash}</span></div>`;
   });
   list.innerHTML=html;
-  $("#newDocBtn").onclick=()=>{
-    // make a blank Untitled doc with a unique name; user saves via the share-sheet folder picker
-    const n=docs.filter(d=>/^Untitled/.test(d.name||"")).length;
-    newDoc(n?`Untitled ${n+1}.md`:"Untitled.md","");
-    closeSheets(); $("#segEdit").click(); src.focus();
-  };
+  $("#newDocBtn").onclick=createNewDoc;
   $("#importBtn").onclick=()=>$("#fileInput").click();
   const gb=$("#gOpenBtn"); if(gb) gb.onclick=openFromGoogle;
   const mb=$("#msOpenBtn"); if(mb) mb.onclick=openFromOneDrive;
