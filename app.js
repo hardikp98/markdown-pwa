@@ -116,6 +116,13 @@ $("#tools").addEventListener("click",e=>{ const b=e.target.closest("[data-act]")
 
 /* ---------- top bar icons ---------- */
 $("#menuBtn").innerHTML=ic.menu; $("#docsBtn").innerHTML=ic.docs; $("#saveBtn").innerHTML=ic.save;
+// tap the title to rename the current doc
+docname.style.cursor="pointer"; docname.title="Tap to rename";
+docname.onclick=()=>{
+  const d=active(); if(!d) return;
+  const n=prompt("File name:", d.name||"Untitled.md");
+  if(n!==null && n.trim()){ d.name=n.trim().endsWith(".md")||n.includes(".")?n.trim():n.trim()+".md"; saveDocs(docs); docname.textContent=d.name; }
+};
 
 /* ---------- sheets ---------- */
 const scrim=$("#scrim");
@@ -139,7 +146,12 @@ function renderDocList(){
     html+=`<div class="docItem" data-id="${d.id}"><span>${(d.name||"Untitled")}</span><span class="meta">${fmt(d.updated)}${tag}</span><span class="dx" data-del="${d.id}">${ic.trash}</span></div>`;
   });
   list.innerHTML=html;
-  $("#newDocBtn").onclick=()=>{ const n=prompt("Name:","Untitled.md"); if(n!==null){ newDoc(n||"Untitled.md",""); closeSheets(); $("#segEdit").click(); src.focus(); } };
+  $("#newDocBtn").onclick=()=>{
+    // make a blank Untitled doc with a unique name; user saves via the share-sheet folder picker
+    const n=docs.filter(d=>/^Untitled/.test(d.name||"")).length;
+    newDoc(n?`Untitled ${n+1}.md`:"Untitled.md","");
+    closeSheets(); $("#segEdit").click(); src.focus();
+  };
   $("#importBtn").onclick=()=>$("#fileInput").click();
   const gb=$("#gOpenBtn"); if(gb) gb.onclick=openFromGoogle;
   const mb=$("#msOpenBtn"); if(mb) mb.onclick=openFromOneDrive;
