@@ -27,7 +27,9 @@ const ic = {
   plus:SVG('<path d="M12 5v14M5 12h14"/>'),
   download:SVG('<path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/>'),
   share:SVG('<path d="M12 3v13"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/>'),
-  theme:SVG('<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>')
+  theme:SVG('<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>'),
+  gdrive:SVG('<path class="fillc" d="M8.3 4l-5.1 8.9 2.6 4.6h10.3l-2.6-4.6H10.9L8.3 4z" opacity=".0"/><path d="M8.3 4l-5.1 8.9h5.1L13.4 4z"/><path d="M3.2 12.9l2.6 4.6h10.3l-2.6-4.6z"/><path d="M21 12.9L15.9 4h-5.1l5.1 8.9z"/>'),
+  onedrive:SVG('<path d="M7 18h10a3 3 0 0 0 .5-5.96A4.5 4.5 0 0 0 8.6 9.2 3.4 3.4 0 0 0 7 18z"/>')
 };
 
 /* ---------- storage ---------- */
@@ -57,9 +59,17 @@ function setActive(id){
   src.value=d.content; render();
   docname.textContent=d.name||"Untitled";
 }
-function newDoc(name,content){
-  const d={id:uid(),name:name||"Untitled.md",content:content||"",updated:Date.now()};
+function newDoc(name,content,provider,cloudId){
+  const d={id:uid(),name:name||"Untitled.md",content:content||"",updated:Date.now(),
+           provider:provider||"local", cloudId:cloudId||null};
   docs.unshift(d); saveDocs(docs); setActive(d.id); return d;
+}
+// if a cloud file with same id already imported, reuse it; else create
+function adoptCloudDoc(provider, cloudId, name, content){
+  let d=docs.find(x=>x.provider===provider && x.cloudId===cloudId);
+  if(d){ d.content=content; d.updated=Date.now(); saveDocs(docs); setActive(d.id); }
+  else d=newDoc(name,content,provider,cloudId);
+  return d;
 }
 function persistActive(){ const d=active(); if(d){ d.content=src.value; d.updated=Date.now(); saveDocs(docs); } }
 
@@ -119,13 +129,20 @@ function renderDocList(){
   const list=$("#docList");
   const fmt=ts=>{ const d=new Date(ts); return d.toLocaleDateString(undefined,{month:"short",day:"numeric"})+" "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}); };
   let html=`<div class="docItem" id="newDocBtn">${ic.plus}<span>New document</span></div>`;
-  html+=`<div class="docItem" id="importBtn">${ic.download}<span>Import from Files…</span><span class="meta">Drive · OneDrive · iCloud</span></div>`;
+  if(window.Cloud && Cloud.google.configured())
+    html+=`<div class="docItem" id="gOpenBtn">${ic.gdrive}<span>Open from Google Drive…</span></div>`;
+  if(window.Cloud && Cloud.onedrive.configured())
+    html+=`<div class="docItem" id="msOpenBtn">${ic.onedrive}<span>Open from OneDrive…</span></div>`;
+  html+=`<div class="docItem" id="importBtn">${ic.download}<span>Import from Files…</span><span class="meta">iCloud · any</span></div>`;
   docs.forEach(d=>{
-    html+=`<div class="docItem" data-id="${d.id}"><span>${(d.name||"Untitled")}</span><span class="meta">${fmt(d.updated)}</span><span class="dx" data-del="${d.id}">${ic.trash}</span></div>`;
+    const tag = d.provider==="gdrive"?" · Drive" : d.provider==="onedrive"?" · OneDrive" : "";
+    html+=`<div class="docItem" data-id="${d.id}"><span>${(d.name||"Untitled")}</span><span class="meta">${fmt(d.updated)}${tag}</span><span class="dx" data-del="${d.id}">${ic.trash}</span></div>`;
   });
   list.innerHTML=html;
   $("#newDocBtn").onclick=()=>{ const n=prompt("Name:","Untitled.md"); if(n!==null){ newDoc(n||"Untitled.md",""); closeSheets(); $("#segEdit").click(); src.focus(); } };
   $("#importBtn").onclick=()=>$("#fileInput").click();
+  const gb=$("#gOpenBtn"); if(gb) gb.onclick=openFromGoogle;
+  const mb=$("#msOpenBtn"); if(mb) mb.onclick=openFromOneDrive;
   list.querySelectorAll("[data-id]").forEach(el=>el.onclick=(e)=>{
     if(e.target.closest("[data-del]")) return;
     setActive(el.dataset.id); closeSheets();
@@ -147,20 +164,43 @@ $("#fileInput").addEventListener("change",e=>{
   r.readAsText(f); e.target.value="";
 });
 
-/* ---------- export / share (back to Files/Drive/OneDrive) ---------- */
-async function exportDoc(){
+/* ---------- open from clouds ---------- */
+async function openFromGoogle(){
+  try{ toast("Opening Google Drive…"); const f=await Cloud.google.open();
+    if(f){ adoptCloudDoc("gdrive",f.id,f.name,f.content); closeSheets(); $("#segEdit").click(); toast("Opened "+f.name); } }
+  catch(e){ alert("Google Drive error:\n"+(e.message||e)); }
+}
+async function openFromOneDrive(){
+  try{ toast("Loading OneDrive…"); const files=await Cloud.onedrive.list();
+    if(!files.length){ alert("No .md files found in your OneDrive."); return; }
+    // simple picker into the docs sheet
+    const list=$("#docList");
+    list.innerHTML=`<div class="docItem" id="odBack">${ic.docs}<span>← Back</span></div>`+
+      files.map(f=>`<div class="docItem" data-od="${f.id}"><span>${f.name}</span></div>`).join("");
+    $("#odBack").onclick=renderDocList;
+    list.querySelectorAll("[data-od]").forEach(el=>el.onclick=async()=>{
+      try{ toast("Downloading…"); const f=await Cloud.onedrive.get(el.dataset.od);
+        adoptCloudDoc("onedrive",f.id,f.name,f.content); closeSheets(); $("#segEdit").click(); toast("Opened "+f.name); }
+      catch(e){ alert("OneDrive error:\n"+(e.message||e)); }
+    });
+  } catch(e){ alert("OneDrive error:\n"+(e.message||e)); }
+}
+
+/* ---------- save: to origin cloud if cloud-backed, else share sheet ---------- */
+async function saveDoc(){
   persistActive(); const d=active(); if(!d) return;
-  const blob=new Blob([src.value],{type:"text/markdown"});
-  const file=new File([blob],d.name||"document.md",{type:"text/markdown"});
-  // Web Share (iOS): lets you "Save to Files", send to Drive/OneDrive apps, etc.
+  try{
+    if(d.provider==="gdrive"){ toast("Saving to Drive…"); const r=await Cloud.google.save(d.name,src.value,d.cloudId); d.cloudId=r.id; saveDocs(docs); toast("Saved to Drive"); return; }
+    if(d.provider==="onedrive"){ toast("Saving to OneDrive…"); const r=await Cloud.onedrive.save(d.name,src.value,d.cloudId); d.cloudId=r.id; saveDocs(docs); toast("Saved to OneDrive"); return; }
+  }catch(e){ alert("Cloud save failed:\n"+(e.message||e)); return; }
+  // local doc → share sheet (Save to Files / Drive / OneDrive apps)
+  const file=new File([new Blob([src.value],{type:"text/markdown"})], d.name||"document.md", {type:"text/markdown"});
   if(navigator.canShare && navigator.canShare({files:[file]})){
     try{ await navigator.share({files:[file],title:d.name}); toast("Shared"); return; }catch{ return; }
   }
-  // fallback: download
-  const url=URL.createObjectURL(blob); const a=document.createElement("a");
-  a.href=url; a.download=d.name||"document.md"; a.click(); URL.revokeObjectURL(url); toast("Exported");
+  const url=URL.createObjectURL(file); const a=document.createElement("a"); a.href=url; a.download=d.name||"document.md"; a.click(); URL.revokeObjectURL(url); toast("Exported");
 }
-$("#saveBtn").onclick=exportDoc;
+$("#saveBtn").onclick=saveDoc;
 
 /* ---------- menu sheet ---------- */
 const THEMES=[["","🟣 LinkDown"],["light","☀️ Light"],["matrix","🟩 Matrix"]];
@@ -168,12 +208,12 @@ function applyTheme(t){ document.documentElement.setAttribute("data-theme",t); $
 function renderMenu(){
   const m=$("#menuList");
   m.innerHTML =
-    `<div class="mRow" data-m="export">${ic.share}<span>Export / Share current doc</span></div>`+
+    `<div class="mRow" data-m="export">${ic.share}<span>Save / Share current doc</span></div>`+
     `<div class="mRow" data-m="import">${ic.download}<span>Import from Files</span></div>`+
     `<div class="mRow" data-m="theme">${ic.theme}<span>Theme: cycle</span></div>`;
   m.querySelectorAll("[data-m]").forEach(el=>el.onclick=()=>{
     const a=el.dataset.m; closeSheets();
-    if(a==="export") exportDoc();
+    if(a==="export") saveDoc();
     else if(a==="import") $("#fileInput").click();
     else if(a==="theme"){ const cur=localStorage.getItem("mdpwa.theme")||""; const i=THEMES.findIndex(t=>t[0]===cur); applyTheme(THEMES[(i+1)%THEMES.length][0]); toast("Theme changed"); }
   });

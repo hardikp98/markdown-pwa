@@ -1,7 +1,7 @@
 /* Service worker — cache the app shell so it works fully offline. */
-const CACHE = "mdpwa-v1";
+const CACHE = "mdpwa-v2";
 const ASSETS = [
-  "./", "./index.html", "./app.js", "./manifest.json",
+  "./", "./index.html", "./app.js", "./config.js", "./cloud.js", "./manifest.json",
   "./marked.min.js", "./purify.min.js", "./hljs.min.js",
   "./hljs-theme.css", "./hljs-light.css",
   "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png"
@@ -14,6 +14,8 @@ self.addEventListener("activate", e => {
 });
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+  // only handle our own assets; let cloud SDK / API calls go straight to network
+  if (new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
     caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
       const copy = res.clone();
