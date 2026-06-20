@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Markdown">
+<meta name="theme-color" content="#0f1420">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="stylesheet" href="hljs-theme.css" id="hljsTheme">
+<title>Markdown</title>
+<script src="marked.min.js"></script>
+<script src="purify.min.js"></script>
+<script src="hljs.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1420;--panel:#131a2a;--bar:#0c111c;--gutter:#0c1119;--chip:#1b2336;
+    --fg:#c9d4e3;--muted:#6b7890;--label:#7c89a3;--head:#fff;
+    --accent:#6c8cff;--accent2:#8a6cff;--border:#222c40;--codebg:#0b1019;
+    --safe-top:env(safe-area-inset-top,0px);--safe-bot:env(safe-area-inset-bottom,0px);
+  }
+  html[data-theme="light"]{--bg:#fff;--panel:#f6f8fa;--bar:#eef1f4;--chip:#e7ebf0;--fg:#24292f;--muted:#6b7280;--label:#57606a;--head:#1a1d21;--accent:#0969da;--accent2:#5a3fd6;--border:#d0d7de;--codebg:#f3f5f8;}
+  html[data-theme="matrix"]{--bg:#000;--panel:#020802;--bar:#000;--chip:#04210c;--fg:#00ff66;--muted:#089a3f;--label:#0a7a33;--head:#9dffae;--accent:#00ff66;--accent2:#00aa44;--border:#0c2c14;--codebg:#010601;}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--fg);
+            -webkit-text-size-adjust:100%}
+  body{display:flex;flex-direction:column;padding-top:var(--safe-top)}
+  /* top bar */
+  #bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bar);border-bottom:1px solid var(--border);flex:0 0 auto}
+  #docname{flex:1;font-size:14px;font-weight:600;color:var(--head);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #bar button{background:var(--chip);border:1px solid var(--border);color:var(--fg);border-radius:9px;padding:8px;display:flex;cursor:pointer}
+  #bar button svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  #bar button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:0;color:#fff}
+  /* segmented edit/preview toggle */
+  #seg{display:flex;background:var(--chip);border-radius:9px;padding:2px;flex:0 0 auto}
+  #seg button{background:transparent;border:0;color:var(--muted);font-size:13px;font-weight:600;padding:6px 14px;border-radius:7px;cursor:pointer}
+  #seg button.active{background:var(--bg);color:var(--fg)}
+  /* formatting toolbar (scrolls horizontally) */
+  #tools{display:flex;gap:2px;padding:6px 10px;background:var(--bar);border-bottom:1px solid var(--border);overflow-x:auto;flex:0 0 auto;-webkit-overflow-scrolling:touch}
+  #tools button{background:transparent;border:0;color:var(--fg);border-radius:7px;padding:9px;display:flex;flex:0 0 auto;cursor:pointer}
+  #tools button:active{background:var(--chip)}
+  #tools button svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  #tools button svg .fillc{fill:currentColor;stroke:none}
+  #tools .sep{width:1px;background:var(--border);margin:4px 5px;flex:0 0 auto}
+  /* panes */
+  #main{flex:1 1 auto;min-height:0;position:relative}
+  #src,#pv{position:absolute;inset:0;overflow:auto;-webkit-overflow-scrolling:touch}
+  #src{border:0;resize:none;width:100%;height:100%;background:var(--panel);color:var(--fg);
+       font-family:ui-monospace,Menlo,monospace;font-size:16px;line-height:1.6;padding:16px;outline:none;
+       white-space:pre-wrap;overflow-wrap:break-word}
+  #pv{padding:16px 18px calc(40px + var(--safe-bot));font-size:16px;line-height:1.6;display:none;overflow-wrap:break-word;word-break:break-word}
+  body.view-preview #src{display:none}
+  body.view-preview #pv{display:block}
+  #pv h1{font-size:1.8em;font-weight:700;margin:.2em 0 .4em;border-bottom:1px solid var(--border);padding-bottom:.3em}
+  #pv h2{font-size:1.4em;font-weight:700;margin:1.1em 0 .45em;border-bottom:1px solid var(--border);padding-bottom:.25em}
+  #pv h3{font-size:1.18em;font-weight:600;margin:1em 0 .4em}
+  #pv h1,#pv h2,#pv h3{color:var(--head);line-height:1.3}
+  #pv p{margin:0 0 .8em} #pv a{color:var(--accent)}
+  #pv ul,#pv ol{margin:0 0 .8em;padding-left:1.4em} #pv li{margin:.25em 0}
+  #pv strong{color:var(--head)}
+  #pv mark{background:var(--accent);color:#0b0b0b;padding:.5px 4px;border-radius:3px}
+  #pv code{background:var(--chip);padding:2px 6px;border-radius:5px;font-size:.86em;font-family:ui-monospace,Menlo,monospace}
+  #pv pre{background:var(--codebg);padding:14px;border-radius:10px;overflow-x:auto;border:1px solid var(--border);margin:0 0 1.2em}
+  #pv pre code{background:0;padding:0}
+  #pv blockquote{border-left:3px solid var(--accent);margin:0 0 1em;padding:.2em 0 .2em 14px;color:var(--muted)}
+  #pv table{border-collapse:collapse;display:block;overflow-x:auto;max-width:100%;margin:0 0 1em} #pv th,#pv td{border:1px solid var(--border);padding:7px 10px}
+  #pv hr{border:0;border-top:1px solid var(--border);margin:1.6em 0}
+  #pv img{max-width:100%}
+  /* sheets (doc list + menu) */
+  #scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;z-index:40}
+  #scrim.open{display:block}
+  .sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--panel);border-top-left-radius:18px;border-top-right-radius:18px;
+         padding:10px 12px calc(16px + var(--safe-bot));transform:translateY(100%);transition:transform .22s;max-height:75vh;overflow:auto;display:none}
+  .sheet.open{transform:translateY(0);display:block}
+  .sheet h3{margin:8px 6px 12px;font-size:15px;color:var(--head)}
+  .docItem{display:flex;align-items:center;gap:10px;padding:13px 12px;border-radius:10px;cursor:pointer;font-size:15px}
+  .docItem:active{background:var(--chip)}
+  .docItem .dx{margin-left:auto;color:var(--muted);padding:4px 8px}
+  .docItem .meta{font-size:12px;color:var(--muted)}
+  .mRow{display:flex;align-items:center;gap:12px;padding:14px 12px;border-radius:10px;font-size:15px;cursor:pointer}
+  .mRow:active{background:var(--chip)}
+  .mRow svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  #status{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + var(--safe-bot));z-index:60;
+          background:var(--accent);color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
+  #status.show{opacity:1}
+</style>
+</head>
+<body>
+  <div id="bar">
+    <button id="menuBtn" title="Menu"></button>
+    <button id="docsBtn" title="Documents"></button>
+    <div id="docname">Untitled</div>
+    <div id="seg">
+      <button id="segEdit" class="active">Edit</button>
+      <button id="segView">View</button>
+    </div>
+    <button id="saveBtn" class="primary" title="Save / Export"></button>
+  </div>
+  <div id="tools"></div>
+  <div id="main">
+    <textarea id="src" placeholder="# Start typing markdown…" autocapitalize="sentences" autocorrect="on"></textarea>
+    <div id="pv"></div>
+  </div>
+
+  <div id="scrim"></div>
+  <div id="docsSheet" class="sheet"><h3>Documents</h3><div id="docList"></div></div>
+  <div id="menuSheet" class="sheet"><h3>Menu</h3><div id="menuList"></div></div>
+  <div id="status"></div>
+  <input type="file" id="fileInput" accept=".md,.markdown,.txt,text/markdown,text/plain" style="display:none">
+
+<script src="app.js"></script>
+</body>
+</html>
