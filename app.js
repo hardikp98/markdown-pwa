@@ -29,8 +29,7 @@ const ic = {
   share:SVG('<path d="M12 3v13"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/>'),
   theme:SVG('<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>'),
   gdrive:SVG('<path class="fillc" d="M8.3 4l-5.1 8.9 2.6 4.6h10.3l-2.6-4.6H10.9L8.3 4z" opacity=".0"/><path d="M8.3 4l-5.1 8.9h5.1L13.4 4z"/><path d="M3.2 12.9l2.6 4.6h10.3l-2.6-4.6z"/><path d="M21 12.9L15.9 4h-5.1l5.1 8.9z"/>'),
-  onedrive:SVG('<path d="M7 18h10a3 3 0 0 0 .5-5.96A4.5 4.5 0 0 0 8.6 9.2 3.4 3.4 0 0 0 7 18z"/>'),
-  eye:SVG('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>')
+  onedrive:SVG('<path d="M7 18h10a3 3 0 0 0 .5-5.96A4.5 4.5 0 0 0 8.6 9.2 3.4 3.4 0 0 0 7 18z"/>')
 };
 
 /* ---------- storage ---------- */
@@ -53,41 +52,11 @@ marked.use({extensions:[{name:"mark",level:"inline",
   renderer(t){return `<mark>${this.parser.parseInline(this.lexer.inlineTokens(t.text))}</mark>`;}}]});
 function render(){ pv.innerHTML = DOMPurify.sanitize(marked.parse(src.value||"")); }
 
-/* ---------- styled live editor: paint the highlight layer behind the textarea ---------- */
-const hl=$("#hl"), editorWrap=$("#editorWrap");
-const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-// inline tokens, applied to already-escaped text
-function inline(t){
-  return t
-    .replace(/(`+)([^`]+?)\1/g,(m,a,b)=>`<span class="mk">${a}</span><span class="code">${b}</span><span class="mk">${a}</span>`)
-    .replace(/(\*\*|__)(?=\S)([\s\S]+?\S)\1/g,(m,a,b)=>`<span class="mk">${a}</span><span class="b">${b}</span><span class="mk">${a}</span>`)
-    .replace(/(^|[^\*_])([\*_])(?=\S)([^\*_]+?\S)\2/g,(m,p,a,b)=>`${p}<span class="mk">${a}</span><span class="i">${b}</span><span class="mk">${a}</span>`)
-    .replace(/(~~)(?=\S)([\s\S]+?\S)\1/g,(m,a,b)=>`<span class="mk">${a}</span><span class="s">${b}</span><span class="mk">${a}</span>`)
-    .replace(/(==)(?=\S)([\s\S]+?\S)\1/g,(m,a,b)=>`<span class="mk">${a}</span><span class="mark">${b}</span><span class="mk">${a}</span>`)
-    .replace(/\[([^\]]*)\]\(([^)]+)\)/g,(m,txt,url)=>`<span class="mk">[</span><span class="lnk">${txt}</span><span class="mk">](${url})</span>`);
-}
-function paint(){
-  const lines=src.value.split("\n");
-  let out="";
-  for(let raw of lines){
-    let line=esc(raw), cls="", body=line, inCode=false;
-    const h=/^(\s*)(#{1,6})(\s+)(.*)$/.exec(line);
-    const q=/^(\s*)(&gt;)(\s+)(.*)$/.exec(line);
-    const li=/^(\s*)([-*+]|\d+\.)(\s+)(.*)$/.exec(line);
-    if(/^\s*```/.test(raw)){ out+=`<span class="mk">${line}</span>\n`; continue; }
-    if(h){ const lvl=h[2].length; out+=`<span class="mk">${h[1]+h[2]+h[3]}</span><span class="h${lvl>3?3:lvl}">${inline(h[4])}</span>\n`; continue; }
-    if(q){ out+=`<span class="mk">${q[1]+q[2]+q[3]}</span><span class="q">${inline(q[4])}</span>\n`; continue; }
-    if(li){ out+=`${li[1]}<span class="li">${li[2]}</span>${li[3]}${inline(li[4])}\n`; continue; }
-    out+=inline(line)+"\n";
-  }
-  hl.innerHTML=out;
-}
-
 /* ---------- doc lifecycle ---------- */
 function setActive(id){
   activeId=id; localStorage.setItem(AKEY,id);
   const d=active(); if(!d) return;
-  src.value=d.content; paint(); render();
+  src.value=d.content; render();
   docname.textContent=d.name||"Untitled";
 }
 function newDoc(name,content,provider,cloudId){
@@ -106,22 +75,17 @@ function persistActive(){ const d=active(); if(d){ d.content=src.value; d.update
 
 let saveTimer=null;
 src.addEventListener("input",()=>{
-  paint();                                   // restyle the live editor
+  render();
   clearTimeout(saveTimer); saveTimer=setTimeout(persistActive,400);  // autosave to localStorage
 });
-// keep the highlight layer scroll-locked to the textarea (they're stacked)
-src.addEventListener("scroll",()=>{ hl.scrollTop=src.scrollTop; hl.scrollLeft=src.scrollLeft; });
 
 /* ---------- status toast ---------- */
 let toastTimer=null;
 function toast(msg){ const s=$("#status"); s.textContent=msg; s.classList.add("show"); clearTimeout(toastTimer); toastTimer=setTimeout(()=>s.classList.remove("show"),1600); }
 
-/* ---------- preview toggle (read-only rendered view) ---------- */
-function showEditor(){ document.body.classList.remove("view-preview"); }
-$("#previewBtn").onclick=()=>{
-  if(document.body.classList.contains("view-preview")){ showEditor(); }
-  else { render(); document.body.classList.add("view-preview"); }
-};
+/* ---------- edit/preview toggle ---------- */
+$("#segEdit").onclick=()=>{ document.body.classList.remove("view-preview"); $("#segEdit").classList.add("active"); $("#segView").classList.remove("active"); };
+$("#segView").onclick=()=>{ render(); document.body.classList.add("view-preview"); $("#segView").classList.add("active"); $("#segEdit").classList.remove("active"); };
 
 /* ---------- formatting toolbar ---------- */
 function getSel(){ return {s:src.selectionStart,e:src.selectionEnd,val:src.value}; }
@@ -154,14 +118,14 @@ $("#tools").addEventListener("click",e=>{ const b=e.target.closest("[data-act]")
 function createNewDoc(){
   const n=docs.filter(d=>/^Untitled/.test(d.name||"")).length;
   newDoc(n?`Untitled ${n+1}.md`:"Untitled.md","");
-  closeSheets(); showEditor();
+  closeSheets(); document.body.classList.remove("view-preview");
+  $("#segEdit").classList.add("active"); $("#segView").classList.remove("active");
   src.focus();
 }
 
 /* ---------- top bar icons ---------- */
 $("#menuBtn").innerHTML=ic.menu; $("#saveBtn").innerHTML=ic.save;
 $("#newBtn").innerHTML=ic.plus; $("#newBtn").onclick=createNewDoc;
-$("#previewBtn").innerHTML=ic.eye;
 // tap the title to rename the current doc
 docname.style.cursor="pointer"; docname.title="Tap to rename";
 docname.onclick=()=>{
@@ -219,7 +183,7 @@ $("#fileInput").addEventListener("change",e=>{
 /* ---------- open from clouds ---------- */
 async function openFromGoogle(){
   try{ toast("Opening Google Drive…"); const f=await Cloud.google.open();
-    if(f){ adoptCloudDoc("gdrive",f.id,f.name,f.content); closeSheets(); showEditor(); toast("Opened "+f.name); } }
+    if(f){ adoptCloudDoc("gdrive",f.id,f.name,f.content); closeSheets(); $("#segEdit").click(); toast("Opened "+f.name); } }
   catch(e){ alert("Google Drive error:\n"+(e.message||e)); }
 }
 async function openFromOneDrive(){
@@ -232,7 +196,7 @@ async function openFromOneDrive(){
     $("#odBack").onclick=renderDocList;
     list.querySelectorAll("[data-od]").forEach(el=>el.onclick=async()=>{
       try{ toast("Downloading…"); const f=await Cloud.onedrive.get(el.dataset.od);
-        adoptCloudDoc("onedrive",f.id,f.name,f.content); closeSheets(); showEditor(); toast("Opened "+f.name); }
+        adoptCloudDoc("onedrive",f.id,f.name,f.content); closeSheets(); $("#segEdit").click(); toast("Opened "+f.name); }
       catch(e){ alert("OneDrive error:\n"+(e.message||e)); }
     });
   } catch(e){ alert("OneDrive error:\n"+(e.message||e)); }
