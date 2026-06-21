@@ -73,11 +73,44 @@ function adoptCloudDoc(provider, cloudId, name, content){
 }
 function persistActive(){ const d=active(); if(d){ d.content=src.value; d.updated=Date.now(); saveDocs(docs); } }
 
-let saveTimer=null;
+let saveTimer=null, cloudTimer=null, cloudSaving=false, cloudDirty=false;
 src.addEventListener("input",()=>{
   render();
-  clearTimeout(saveTimer); saveTimer=setTimeout(persistActive,400);  // autosave to localStorage
+  clearTimeout(saveTimer); saveTimer=setTimeout(persistActive,400);   // autosave to phone
+  const d=active();
+  if(d && (d.provider==="gdrive"||d.provider==="onedrive")){           // autosave to cloud
+    cloudDirty=true;
+    clearTimeout(cloudTimer); cloudTimer=setTimeout(cloudAutoSave, 2500);
+  }
 });
+
+// debounced background save to the doc's origin cloud. Silent, non-blocking, retries on next edit.
+async function cloudAutoSave(){
+  const d=active(); if(!d || cloudSaving) return;
+  if(d.provider!=="gdrive" && d.provider!=="onedrive") return;
+  cloudSaving=true; cloudDirty=false;
+  const content=src.value;
+  try{
+    setSync("saving");
+    if(d.provider==="gdrive"){ const r=await Cloud.google.save(d.name,content,d.cloudId); d.cloudId=r.id; }
+    else { const r=await Cloud.onedrive.save(d.name,content,d.cloudId); d.cloudId=r.id; }
+    saveDocs(docs); setSync("saved");
+  }catch(e){
+    setSync("error");   // leave cloudDirty so the next edit (or manual Save) retries
+    cloudDirty=true;
+  }finally{
+    cloudSaving=false;
+    // if the user kept typing during the save, schedule another pass
+    if(cloudDirty){ clearTimeout(cloudTimer); cloudTimer=setTimeout(cloudAutoSave, 2500); }
+  }
+}
+// tiny sync indicator next to the filename
+function setSync(state){
+  const el=$("#sync"); if(!el) return;
+  el.textContent = state==="saving" ? "saving…" : state==="saved" ? "✓ saved" : state==="error" ? "⚠ offline" : "";
+  el.className = "sync "+state;
+  if(state==="saved"){ clearTimeout(setSync._t); setSync._t=setTimeout(()=>{ el.textContent=""; },1800); }
+}
 
 /* ---------- status toast ---------- */
 let toastTimer=null;

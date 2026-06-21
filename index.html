@@ -30,6 +30,8 @@
   /* top bar */
   #bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bar);border-bottom:1px solid var(--border);flex:0 0 auto}
   #docname{flex:1;font-size:14px;font-weight:600;color:var(--head);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #sync{font-size:11px;color:var(--muted);flex:0 0 auto;white-space:nowrap;min-width:0}
+  #sync.saved{color:var(--accent)} #sync.error{color:#f48771}
   #bar button{background:var(--chip);border:1px solid var(--border);color:var(--fg);border-radius:9px;padding:8px;display:flex;cursor:pointer}
   #bar button svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   #bar button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:0;color:#fff}
@@ -92,6 +94,7 @@
     <button id="menuBtn" title="Menu"></button>
     <button id="newBtn" title="New document"></button>
     <div id="docname">Untitled</div>
+    <span id="sync" class="sync"></span>
     <div id="seg">
       <button id="segEdit" class="active">Edit</button>
       <button id="segView">View</button>

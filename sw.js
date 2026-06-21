@@ -1,5 +1,5 @@
 /* Service worker — cache the app shell so it works fully offline. */
-const CACHE = "mdpwa-v7";
+const CACHE = "mdpwa-v8";
 const ASSETS = [
   "./", "./index.html", "./app.js", "./config.js", "./cloud.js", "./manifest.json",
   "./marked.min.js", "./purify.min.js", "./hljs.min.js",
