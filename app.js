@@ -23,6 +23,7 @@ const ic = {
   link:SVG('<path d="M10 13a4 4 0 0 0 6 .5l2-2a4 4 0 0 0-6-6l-1 1"/><path d="M14 11a4 4 0 0 0-6-.5l-2 2a4 4 0 0 0 6 6l1-1"/>'),
   table:SVG('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/>'),
   codeblk:SVG('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 9l-2 3 2 3M15 9l2 3-2 3"/>'),
+  symbols:SVG('<circle cx="7" cy="7" r="3"/><rect x="14" y="4" width="6" height="6" rx="1"/><path d="M7 14l2.5 5h-5z"/><path d="M14 14h6v6h-6z"/>'),
   trash:SVG('<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>'),
   plus:SVG('<path d="M12 5v14M5 12h14"/>'),
   download:SVG('<path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/>'),
@@ -50,7 +51,37 @@ marked.use({extensions:[{name:"mark",level:"inline",
   start(s){return s.indexOf("==");},
   tokenizer(s){const m=/^==(?=\S)([\s\S]*?\S)==/.exec(s); if(m) return {type:"mark",raw:m[0],text:m[1]};},
   renderer(t){return `<mark>${this.parser.parseInline(this.lexer.inlineTokens(t.text))}</mark>`;}}]});
-function render(){ pv.innerHTML = DOMPurify.sanitize(marked.parse(src.value||"")); }
+function render(){
+  pv.innerHTML = DOMPurify.sanitize(marked.parse(src.value||""));
+  wireTaskCheckboxes();
+}
+// make rendered "- [ ]" checkboxes tappable: toggling one rewrites the Nth checkbox in the source
+function wireTaskCheckboxes(){
+  const boxes=pv.querySelectorAll('input[type="checkbox"]');
+  boxes.forEach((box,idx)=>{
+    box.disabled=false; box.style.cursor="pointer"; box.style.width="20px"; box.style.height="20px";
+    box.onclick=(e)=>{
+      e.preventDefault();                 // we drive state from the source text, not the DOM
+      toggleTask(idx);
+    };
+  });
+}
+// flip the idx-th task marker in src.value between [ ] and [x]
+function toggleTask(idx){
+  const re=/^(\s*[-*+]\s+)\[([ xX])\]/gm;
+  let n=0, out=src.value, m, replaced=false;
+  out=src.value.replace(re,(full,pre,mark)=>{
+    if(n++===idx){ replaced=true; const on=mark.toLowerCase()==="x"; return pre+(on?"[ ]":"[x]"); }
+    return full;
+  });
+  if(replaced){
+    src.value=out;
+    const t=active(); if(t){ t.content=out; }
+    render();                              // re-render to reflect new state
+    clearTimeout(saveTimer); saveTimer=setTimeout(persistActive,400);
+    if(t && (t.provider==="gdrive"||t.provider==="onedrive")){ cloudDirty=true; clearTimeout(cloudTimer); cloudTimer=setTimeout(cloudAutoSave,2500); }
+  }
+}
 
 /* ---------- theme ---------- */
 const THEMES=[["","🟣 LinkDown"],["light","☀️ Light"],["matrix","🟩 Matrix"]];
@@ -145,11 +176,23 @@ const ACT={
   ul:()=>linePrefix("- "),ol:()=>linePrefix("",true),task:()=>linePrefix("- [ ] "),quote:()=>linePrefix("> "),
   link:()=>{const{s,e,val}=getSel();const sel=val.slice(s,e)||"text";insert(`[${sel}](url)`,4);},
   table:()=>insert("\n| A | B |\n| --- | --- |\n| 1 | 2 |\n"),
-  codeblk:()=>insert("\n```\n\n```\n",5)
+  codeblk:()=>insert("\n```\n\n```\n",5),
+  symbols:()=>toggleSymbolBar()
 };
-const TOOLS=[["undo"],["redo"],["sep"],["h1"],["h2"],["bold"],["italic"],["strike"],["highlight"],["code"],["sep"],["ul"],["ol"],["task"],["quote"],["sep"],["link"],["table"],["codeblk"]];
+const TOOLS=[["undo"],["redo"],["sep"],["h1"],["h2"],["bold"],["italic"],["strike"],["highlight"],["code"],["sep"],["ul"],["ol"],["task"],["quote"],["symbols"],["sep"],["link"],["table"],["codeblk"]];
 $("#tools").innerHTML = TOOLS.map(t=> t[0]==="sep" ? '<span class="sep"></span>' : `<button data-act="${t[0]}">${ic[t[0]]}</button>`).join("");
 $("#tools").addEventListener("click",e=>{ const b=e.target.closest("[data-act]"); if(b&&ACT[b.dataset.act]) ACT[b.dataset.act](); });
+
+// symbol inserter: a row of glyphs you tap to insert at the cursor (energy dots, checks, etc.)
+const SYMBOLS=["▢","▣","●","○","☐","☑","★","→","•","—"];
+function toggleSymbolBar(){
+  let bar=$("#symBar");
+  if(bar){ bar.remove(); return; }
+  bar=document.createElement("div"); bar.id="symBar";
+  bar.innerHTML=SYMBOLS.map(s=>`<button class="symBtn">${s}</button>`).join("");
+  $("#tools").after(bar);
+  bar.querySelectorAll(".symBtn").forEach(b=>b.onclick=()=>{ insert(b.textContent); });
+}
 
 /* ---------- new document (one tap) ---------- */
 function createNewDoc(){

@@ -46,6 +46,14 @@
   #tools button svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   #tools button svg .fillc{fill:currentColor;stroke:none}
   #tools .sep{width:1px;background:var(--border);margin:4px 5px;flex:0 0 auto}
+  /* symbol inserter row */
+  #symBar{display:flex;gap:4px;padding:6px 10px;background:var(--bar);border-bottom:1px solid var(--border);overflow-x:auto;flex:0 0 auto;-webkit-overflow-scrolling:touch}
+  .symBtn{background:var(--chip);border:1px solid var(--border);color:var(--fg);border-radius:8px;font-size:18px;padding:6px 12px;flex:0 0 auto;cursor:pointer;line-height:1}
+  .symBtn:active{filter:brightness(1.2)}
+  /* tappable task checkboxes in preview */
+  #pv input[type="checkbox"]{accent-color:var(--accent);margin-right:8px;vertical-align:-2px}
+  #pv li.task-list-item{list-style:none}
+  #pv ul:has(li.task-list-item){padding-left:.4em}
   /* panes */
   #main{flex:1 1 auto;min-height:0;position:relative}
   #src,#pv{position:absolute;inset:0;overflow:auto;-webkit-overflow-scrolling:touch}
