@@ -34,20 +34,24 @@ async function gOpen(){
       .setMode(google.picker.DocsViewMode.LIST)
       .setMimeTypes("text/plain,text/markdown,text/x-markdown,application/octet-stream")
       .setSelectFolderEnabled(false);
-    const picker=new google.picker.PickerBuilder()
+    const builder=new google.picker.PickerBuilder()
       .setOAuthToken(gToken).setDeveloperKey(C.GOOGLE_API_KEY).addView(view)
       .setCallback(data=>{
         const action=data[google.picker.Response.ACTION] || data.action;
         if(action===google.picker.Action.PICKED){
           const docs=data[google.picker.Response.DOCUMENTS] || data.docs;
           const f=docs[0];
-          // download raw bytes directly (more reliable than gapi for text); surface any error
-          fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`,{headers:{Authorization:"Bearer "+gToken}})
+          // download raw bytes directly; supportsAllDrives covers shared/My-Drive files
+          fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media&supportsAllDrives=true`,{headers:{Authorization:"Bearer "+gToken}})
             .then(r=>{ if(!r.ok) throw new Error("Drive download HTTP "+r.status); return r.text(); })
             .then(text=>resolve({provider:"gdrive", id:f.id, name:f.name||(f[google.picker.Document.NAME]), content:text}))
             .catch(reject);
         } else if(action===google.picker.Action.CANCEL){ resolve(null); }
-      }).build();
+      });
+    // CRITICAL for drive.file scope: app id (= project number) makes a Picker selection
+    // grant this app access to the chosen file; without it, downloads 404.
+    if(C.GOOGLE_APP_ID) builder.setAppId(C.GOOGLE_APP_ID);
+    const picker=builder.build();
     picker.setVisible(true);
   });
 }

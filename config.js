@@ -5,6 +5,9 @@ window.MD_CONFIG = {
   GOOGLE_CLIENT_ID: "660337561069-8ttd3ql6oih7e6qepkhtra3u454bl8er.apps.googleusercontent.com",
   // Google Cloud Console → Credentials → API key (for the Picker); restrict to your Pages domain
   GOOGLE_API_KEY: "AIzaSyA-Y8ZT8Ml55auF3ip7MXep6axIQepvjG4",
+  // App ID = your GCP project NUMBER (prefix of the client id). Required so drive.file Picker
+  // selections grant this app access to the chosen file (otherwise downloads 404).
+  GOOGLE_APP_ID: "660337561069",
   // Azure → App registration → Application (client) ID  (redirect type: SPA)
   MS_CLIENT_ID: "",
   // "common" lets both personal + work Microsoft accounts sign in
