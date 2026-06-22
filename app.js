@@ -52,6 +52,10 @@ marked.use({extensions:[{name:"mark",level:"inline",
   renderer(t){return `<mark>${this.parser.parseInline(this.lexer.inlineTokens(t.text))}</mark>`;}}]});
 function render(){ pv.innerHTML = DOMPurify.sanitize(marked.parse(src.value||"")); }
 
+/* ---------- theme ---------- */
+const THEMES=[["","🟣 LinkDown"],["light","☀️ Light"],["matrix","🟩 Matrix"]];
+function applyTheme(t){ document.documentElement.setAttribute("data-theme",t); $("#hljsTheme").href=(t==="light")?"hljs-light.css":"hljs-theme.css"; localStorage.setItem("mdpwa.theme",t); render(); }
+
 /* ---------- doc lifecycle ---------- */
 function setActive(id){
   activeId=id; localStorage.setItem(AKEY,id);
@@ -167,31 +171,46 @@ docname.onclick=()=>{
   if(n!==null && n.trim()){ d.name=n.trim().endsWith(".md")||n.includes(".")?n.trim():n.trim()+".md"; saveDocs(docs); docname.textContent=d.name; }
 };
 
-/* ---------- sheets ---------- */
+/* ---------- the single sheet (documents + actions) ---------- */
 const scrim=$("#scrim");
 function openSheet(el){ persistActive(); scrim.classList.add("open"); el.classList.add("open"); if(el.id==="docsSheet") renderDocList(); }
 function closeSheets(){ scrim.classList.remove("open"); document.querySelectorAll(".sheet").forEach(s=>s.classList.remove("open")); }
 scrim.onclick=closeSheets;
-$("#menuBtn").onclick=()=>openSheet($("#menuSheet"));
+$("#menuBtn").onclick=()=>openSheet($("#docsSheet"));
 
 function renderDocList(){
   const list=$("#docList");
   const fmt=ts=>{ const d=new Date(ts); return d.toLocaleDateString(undefined,{month:"short",day:"numeric"})+" "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}); };
-  let html=`<div class="docItem" id="newDocBtn">${ic.plus}<span>New document</span></div>`;
+  // Sources row: open/import from elsewhere
+  let sources=`<div class="docItem" id="importBtn">${ic.download}<span>Import from Files…</span><span class="meta">iCloud · any</span></div>`;
   if(window.Cloud && Cloud.google.configured())
-    html+=`<div class="docItem" id="gOpenBtn">${ic.gdrive}<span>Open from Google Drive…</span></div>`;
+    sources+=`<div class="docItem" id="gOpenBtn">${ic.gdrive}<span>Open from Google Drive…</span></div>`;
   if(window.Cloud && Cloud.onedrive.configured())
-    html+=`<div class="docItem" id="msOpenBtn">${ic.onedrive}<span>Open from OneDrive…</span></div>`;
-  html+=`<div class="docItem" id="importBtn">${ic.download}<span>Import from Files…</span><span class="meta">iCloud · any</span></div>`;
+    sources+=`<div class="docItem" id="msOpenBtn">${ic.onedrive}<span>Open from OneDrive…</span></div>`;
+  // Document list
+  let items="";
   docs.forEach(d=>{
     const tag = d.provider==="gdrive"?" · Drive" : d.provider==="onedrive"?" · OneDrive" : "";
-    html+=`<div class="docItem" data-id="${d.id}"><span>${(d.name||"Untitled")}</span><span class="meta">${fmt(d.updated)}${tag}</span><span class="dx" data-del="${d.id}">${ic.trash}</span></div>`;
+    const activeCls = d.id===activeId ? " active" : "";
+    items+=`<div class="docItem${activeCls}" data-id="${d.id}"><span>${(d.name||"Untitled")}</span><span class="meta">${fmt(d.updated)}${tag}</span><span class="dx" data-del="${d.id}">${ic.trash}</span></div>`;
   });
-  list.innerHTML=html;
+  list.innerHTML =
+    `<div class="sheetHead"><h3>Documents</h3><button class="newBtnSheet" id="newDocBtn">${ic.plus}<span>New</span></button></div>`+
+    `<div class="sheetGroup">${items||'<div class="empty">No documents yet</div>'}</div>`+
+    `<div class="sheetLabel">Open from</div>`+
+    `<div class="sheetGroup">${sources}</div>`+
+    `<div class="sheetLabel">Settings</div>`+
+    `<div class="sheetGroup"><div class="docItem" id="themeBtn">${ic.theme}<span>Theme</span><span class="meta" id="themeName"></span></div></div>`;
+  // wire up
   $("#newDocBtn").onclick=createNewDoc;
   $("#importBtn").onclick=()=>$("#fileInput").click();
   const gb=$("#gOpenBtn"); if(gb) gb.onclick=openFromGoogle;
   const mb=$("#msOpenBtn"); if(mb) mb.onclick=openFromOneDrive;
+  const tn=$("#themeName"); if(tn){ const cur=localStorage.getItem("mdpwa.theme")||""; tn.textContent=(THEMES.find(t=>t[0]===cur)||THEMES[0])[1]; }
+  $("#themeBtn").onclick=()=>{
+    const cur=localStorage.getItem("mdpwa.theme")||""; const i=THEMES.findIndex(t=>t[0]===cur);
+    const next=THEMES[(i+1)%THEMES.length]; applyTheme(next[0]); $("#themeName").textContent=next[1];
+  };
   list.querySelectorAll("[data-id]").forEach(el=>el.onclick=(e)=>{
     if(e.target.closest("[data-del]")) return;
     setActive(el.dataset.id); closeSheets();
@@ -250,27 +269,6 @@ async function saveDoc(){
   const url=URL.createObjectURL(file); const a=document.createElement("a"); a.href=url; a.download=d.name||"document.md"; a.click(); URL.revokeObjectURL(url); toast("Exported");
 }
 $("#saveBtn").onclick=saveDoc;
-
-/* ---------- menu sheet ---------- */
-const THEMES=[["","🟣 LinkDown"],["light","☀️ Light"],["matrix","🟩 Matrix"]];
-function applyTheme(t){ document.documentElement.setAttribute("data-theme",t); $("#hljsTheme").href=(t==="light")?"hljs-light.css":"hljs-theme.css"; localStorage.setItem("mdpwa.theme",t); render(); }
-function renderMenu(){
-  const m=$("#menuList");
-  m.innerHTML =
-    `<div class="mRow" data-m="docs">${ic.docs}<span>Documents</span></div>`+
-    `<div class="mRow" data-m="export">${ic.share}<span>Save / Share current doc</span></div>`+
-    `<div class="mRow" data-m="import">${ic.download}<span>Import from Files</span></div>`+
-    `<div class="mRow" data-m="theme">${ic.theme}<span>Theme: cycle</span></div>`;
-  m.querySelectorAll("[data-m]").forEach(el=>el.onclick=()=>{
-    const a=el.dataset.m;
-    if(a==="docs"){ $("#menuSheet").classList.remove("open"); openSheet($("#docsSheet")); return; }
-    closeSheets();
-    if(a==="export") saveDoc();
-    else if(a==="import") $("#fileInput").click();
-    else if(a==="theme"){ const cur=localStorage.getItem("mdpwa.theme")||""; const i=THEMES.findIndex(t=>t[0]===cur); applyTheme(THEMES[(i+1)%THEMES.length][0]); toast("Theme changed"); }
-  });
-}
-renderMenu();
 
 /* ---------- boot ---------- */
 applyTheme(localStorage.getItem("mdpwa.theme")||"");

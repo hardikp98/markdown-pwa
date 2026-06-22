@@ -76,14 +76,26 @@
   .sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--panel);border-top-left-radius:18px;border-top-right-radius:18px;
          padding:10px 12px calc(16px + var(--safe-bot));transform:translateY(100%);transition:transform .22s;max-height:75vh;overflow:auto;display:none}
   .sheet.open{transform:translateY(0);display:block}
-  .sheet h3{margin:8px 6px 12px;font-size:15px;color:var(--head)}
-  .docItem{display:flex;align-items:center;gap:10px;padding:13px 12px;border-radius:10px;cursor:pointer;font-size:15px}
+  .sheet h3{margin:0;font-size:17px;font-weight:700;color:var(--head)}
+  .sheetHead{display:flex;align-items:center;justify-content:space-between;margin:4px 4px 14px}
+  .newBtnSheet{display:flex;align-items:center;gap:6px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:0;color:#fff;
+               font-size:14px;font-weight:600;padding:8px 14px;border-radius:10px;cursor:pointer}
+  .newBtnSheet svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  .sheetLabel{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--label);margin:18px 6px 6px}
+  .sheetGroup{background:var(--bg);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .sheetGroup .docItem{border-bottom:1px solid var(--border)}
+  .sheetGroup .docItem:last-child{border-bottom:0}
+  .docItem{display:flex;align-items:center;gap:10px;padding:13px 12px;cursor:pointer;font-size:15px}
   .docItem:active{background:var(--chip)}
-  .docItem .dx{margin-left:auto;color:var(--muted);padding:4px 8px}
-  .docItem .meta{font-size:12px;color:var(--muted)}
-  .mRow{display:flex;align-items:center;gap:12px;padding:14px 12px;border-radius:10px;font-size:15px;cursor:pointer}
-  .mRow:active{background:var(--chip)}
-  .mRow svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .docItem.active{background:var(--chip)}
+  .docItem>span:first-child{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .docItem.active>span:first-child{color:var(--accent);font-weight:600}
+  .docItem svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;color:var(--muted)}
+  .docItem .meta{flex:0 0 auto;font-size:12px;color:var(--muted)}
+  .docItem .dx{flex:0 0 auto;color:var(--muted);padding:4px 6px}
+  .docItem .dx svg{width:17px;height:17px}
+  .empty{padding:18px 12px;color:var(--muted);font-size:14px;text-align:center}
+  .empty{padding:18px 12px;color:var(--muted);font-size:14px;text-align:center}
   #status{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + var(--safe-bot));z-index:60;
           background:var(--accent);color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
   #status.show{opacity:1}
@@ -108,8 +120,7 @@
   </div>
 
   <div id="scrim"></div>
-  <div id="docsSheet" class="sheet"><h3>Documents</h3><div id="docList"></div></div>
-  <div id="menuSheet" class="sheet"><h3>Menu</h3><div id="menuList"></div></div>
+  <div id="docsSheet" class="sheet"><div id="docList"></div></div>
   <div id="status"></div>
   <input type="file" id="fileInput" accept=".md,.markdown,.txt,text/markdown,text/plain" style="display:none">
 
