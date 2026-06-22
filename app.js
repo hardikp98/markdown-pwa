@@ -330,7 +330,7 @@ async function openFromOneDrive(){
 async function saveDoc(){
   persistActive(); const d=active(); if(!d) return;
   try{
-    if(d.provider==="gdrive"){ toast("Saving to Drive…"); const r=await Cloud.google.save(d.name,src.value,d.cloudId); d.cloudId=r.id; saveDocs(docs); toast("Saved to Drive"); return; }
+    if(d.provider==="gdrive"){ toast("Saving to Drive…"); const r=await Cloud.google.save(d.name,src.value,d.cloudId,true); d.cloudId=r.id; saveDocs(docs); toast("Saved to Drive"); return; }
     if(d.provider==="onedrive"){ toast("Saving to OneDrive…"); const r=await Cloud.onedrive.save(d.name,src.value,d.cloudId); d.cloudId=r.id; saveDocs(docs); toast("Saved to OneDrive"); return; }
   }catch(e){ alert("Cloud save failed:\n"+(e.message||e)); return; }
   // local doc → share sheet (Save to Files / Drive / OneDrive apps)

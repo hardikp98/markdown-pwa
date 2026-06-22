@@ -20,23 +20,25 @@ async function gInit(){
   });
   gReady=true;
 }
+// opts.interactive=true (manual Save / user tap): NO timeout — user may take a while to sign in.
+// opts.interactive=false (background auto-save): short timeout so it can't hang the indicator.
 function gAuth(opts){
-  // if we already hold a token, reuse it silently (no popup, can't hang from a timer)
-  if(gToken && !(opts&&opts.force)) return Promise.resolve(gToken);
+  opts=opts||{};
+  if(gToken && !opts.force) return Promise.resolve(gToken);   // reuse existing token silently
   return new Promise((resolve,reject)=>{
-    let done=false;
-    const finish=fn=>(...a)=>{ if(done) return; done=true; fn(...a); };
+    let done=false, timer=null;
+    const finish=fn=>(...a)=>{ if(done) return; done=true; if(timer) clearTimeout(timer); fn(...a); };
     const ok=finish(resolve), bad=finish(reject);
     gTokenClient.callback=(resp)=>{ if(resp.error) return bad(new Error(resp.error)); gToken=resp.access_token; gapi.client.setToken({access_token:gToken}); ok(gToken); };
     gTokenClient.error_callback=(err)=>bad(new Error((err&&err.type)||"auth_failed"));
-    // safety net: if neither callback fires (popup blocked from timer), don't hang forever
-    setTimeout(()=>bad(new Error("auth_timeout")), 12000);
+    // only background (non-interactive) calls get a timeout; interactive sign-in waits for the user
+    if(!opts.interactive) timer=setTimeout(()=>bad(new Error("auth_timeout")), 12000);
     gTokenClient.requestAccessToken({prompt: gToken?"":"consent"});
   });
 }
 // open: show Google Picker, return {id,name,content}
 async function gOpen(){
-  await gInit(); await gAuth();
+  await gInit(); await gAuth({interactive:true});
   return new Promise((resolve,reject)=>{
     const view=new google.picker.DocsView(google.picker.ViewId.DOCS)
       .setMode(google.picker.DocsViewMode.LIST)
@@ -67,8 +69,8 @@ async function gOpen(){
   });
 }
 // save: update existing file (by id) or create new in Drive
-async function gSave(name, content, fileId){
-  await gInit(); await gAuth();
+async function gSave(name, content, fileId, interactive){
+  await gInit(); await gAuth({interactive:!!interactive});
   const meta={name}; const boundary="-------mdpwa"+Math.abs(name.length*997).toString(36);
   const body =
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n`+
