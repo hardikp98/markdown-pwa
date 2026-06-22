@@ -79,9 +79,11 @@
          display:flex;flex-direction:column}
   .sheet.open{transform:translateX(0)}
   .sheet h3{margin:0;font-size:17px;font-weight:700;color:var(--head)}
+  /* #docList is the real flex child of .sheet — it must carry the column layout */
+  #docList{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
   /* drawer regions: head (fixed) · docs list (scrolls/grows) · footer groups (pinned) */
-  .drawerTop{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 12px}
-  .drawerBot{flex:0 0 auto;border-top:1px solid var(--border);padding:8px 12px calc(12px + var(--safe-bot));overflow-y:auto;max-height:42%}
+  .drawerTop{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 12px;touch-action:pan-y}
+  .drawerBot{flex:0 0 auto;border-top:1px solid var(--border);padding:8px 12px calc(12px + var(--safe-bot));overflow-y:auto;max-height:42%;touch-action:pan-y}
   .sheetHead{display:flex;align-items:center;justify-content:space-between;padding:14px 4px 12px;position:sticky;top:0;background:var(--panel);z-index:1}
   .newBtnSheet{display:flex;align-items:center;gap:6px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:0;color:#fff;
                font-size:14px;font-weight:600;padding:8px 14px;border-radius:10px;cursor:pointer}
