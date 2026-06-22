@@ -125,10 +125,12 @@ async function cloudAutoSave(){
   if(d.provider!=="gdrive" && d.provider!=="onedrive") return;
   cloudSaving=true; cloudDirty=false;
   const content=src.value;
+  // hard timeout so the indicator can never stick on "saving…" forever
+  const withTimeout=(p,ms)=>Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej(new Error("save_timeout")),ms))]);
   try{
     setSync("saving");
-    if(d.provider==="gdrive"){ const r=await Cloud.google.save(d.name,content,d.cloudId); d.cloudId=r.id; }
-    else { const r=await Cloud.onedrive.save(d.name,content,d.cloudId); d.cloudId=r.id; }
+    if(d.provider==="gdrive"){ const r=await withTimeout(Cloud.google.save(d.name,content,d.cloudId),15000); d.cloudId=r.id; }
+    else { const r=await withTimeout(Cloud.onedrive.save(d.name,content,d.cloudId),15000); d.cloudId=r.id; }
     saveDocs(docs); setSync("saved");
   }catch(e){
     setSync("error");   // leave cloudDirty so the next edit (or manual Save) retries

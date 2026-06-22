@@ -20,9 +20,17 @@ async function gInit(){
   });
   gReady=true;
 }
-function gAuth(){
+function gAuth(opts){
+  // if we already hold a token, reuse it silently (no popup, can't hang from a timer)
+  if(gToken && !(opts&&opts.force)) return Promise.resolve(gToken);
   return new Promise((resolve,reject)=>{
-    gTokenClient.callback=(resp)=>{ if(resp.error) return reject(resp); gToken=resp.access_token; gapi.client.setToken({access_token:gToken}); resolve(gToken); };
+    let done=false;
+    const finish=fn=>(...a)=>{ if(done) return; done=true; fn(...a); };
+    const ok=finish(resolve), bad=finish(reject);
+    gTokenClient.callback=(resp)=>{ if(resp.error) return bad(new Error(resp.error)); gToken=resp.access_token; gapi.client.setToken({access_token:gToken}); ok(gToken); };
+    gTokenClient.error_callback=(err)=>bad(new Error((err&&err.type)||"auth_failed"));
+    // safety net: if neither callback fires (popup blocked from timer), don't hang forever
+    setTimeout(()=>bad(new Error("auth_timeout")), 12000);
     gTokenClient.requestAccessToken({prompt: gToken?"":"consent"});
   });
 }
