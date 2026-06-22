@@ -258,9 +258,12 @@ $("#fileInput").addEventListener("change",e=>{
 
 /* ---------- open from clouds ---------- */
 async function openFromGoogle(){
-  try{ toast("Opening Google Drive…"); const f=await Cloud.google.open();
-    if(f){ adoptCloudDoc("gdrive",f.id,f.name,f.content); closeSheets(); $("#segEdit").click(); toast("Opened "+f.name); } }
-  catch(e){ alert("Google Drive error:\n"+(e.message||e)); }
+  try{
+    toast("Opening Google Drive…");
+    const f=await Cloud.google.open();
+    if(f){ adoptCloudDoc("gdrive",f.id,f.name,f.content); closeSheets(); $("#segEdit").click(); toast("Opened "+f.name); }
+  }
+  catch(e){ alert("Google Drive error:\n"+(e&&(e.message||e.error||JSON.stringify(e))||e)); }
 }
 async function openFromOneDrive(){
   try{ toast("Loading OneDrive…"); const files=await Cloud.onedrive.list();

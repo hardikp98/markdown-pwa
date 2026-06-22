@@ -31,15 +31,22 @@ async function gOpen(){
   await gInit(); await gAuth();
   return new Promise((resolve,reject)=>{
     const view=new google.picker.DocsView(google.picker.ViewId.DOCS)
-      .setMimeTypes("text/markdown,text/plain,application/octet-stream").setSelectFolderEnabled(false);
+      .setMode(google.picker.DocsViewMode.LIST)
+      .setMimeTypes("text/plain,text/markdown,text/x-markdown,application/octet-stream")
+      .setSelectFolderEnabled(false);
     const picker=new google.picker.PickerBuilder()
       .setOAuthToken(gToken).setDeveloperKey(C.GOOGLE_API_KEY).addView(view)
-      .setCallback(async data=>{
-        if(data.action===google.picker.Action.PICKED){
-          const f=data.docs[0];
-          const res=await gapi.client.drive.files.get({fileId:f.id, alt:"media"});
-          resolve({provider:"gdrive", id:f.id, name:f.name, content:res.body});
-        } else if(data.action===google.picker.Action.CANCEL){ resolve(null); }
+      .setCallback(data=>{
+        const action=data[google.picker.Response.ACTION] || data.action;
+        if(action===google.picker.Action.PICKED){
+          const docs=data[google.picker.Response.DOCUMENTS] || data.docs;
+          const f=docs[0];
+          // download raw bytes directly (more reliable than gapi for text); surface any error
+          fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`,{headers:{Authorization:"Bearer "+gToken}})
+            .then(r=>{ if(!r.ok) throw new Error("Drive download HTTP "+r.status); return r.text(); })
+            .then(text=>resolve({provider:"gdrive", id:f.id, name:f.name||(f[google.picker.Document.NAME]), content:text}))
+            .catch(reject);
+        } else if(action===google.picker.Action.CANCEL){ resolve(null); }
       }).build();
     picker.setVisible(true);
   });
