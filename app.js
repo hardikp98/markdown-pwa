@@ -174,9 +174,27 @@ docname.onclick=()=>{
 /* ---------- the single sheet (documents + actions) ---------- */
 const scrim=$("#scrim");
 function openSheet(el){ persistActive(); scrim.classList.add("open"); el.classList.add("open"); if(el.id==="docsSheet") renderDocList(); }
+function openDrawer(){ openSheet($("#docsSheet")); }
 function closeSheets(){ scrim.classList.remove("open"); document.querySelectorAll(".sheet").forEach(s=>s.classList.remove("open")); }
 scrim.onclick=closeSheets;
-$("#menuBtn").onclick=()=>openSheet($("#docsSheet"));
+$("#menuBtn").onclick=openDrawer;
+
+/* ---------- iOS edge-swipe: swipe right from the left edge opens the drawer; swipe left closes it ---------- */
+(function(){
+  const EDGE=28, THRESH=55; let sx=0, sy=0, tracking=false, fromEdge=false;
+  document.addEventListener("touchstart",e=>{
+    const t=e.touches[0]; sx=t.clientX; sy=t.clientY; tracking=true;
+    fromEdge = sx<=EDGE;            // started near the left screen edge
+  },{passive:true});
+  document.addEventListener("touchend",e=>{
+    if(!tracking) return; tracking=false;
+    const t=e.changedTouches[0]; const dx=t.clientX-sx, dy=t.clientY-sy;
+    if(Math.abs(dx)<THRESH || Math.abs(dy)>Math.abs(dx)) return;   // mostly-horizontal only
+    const drawerOpen=$("#docsSheet").classList.contains("open");
+    if(dx>0 && fromEdge && !drawerOpen) openDrawer();              // edge → right: open
+    else if(dx<0 && drawerOpen) closeSheets();                     // left swipe: close
+  },{passive:true});
+})();
 
 function renderDocList(){
   const list=$("#docList");
@@ -195,12 +213,18 @@ function renderDocList(){
     items+=`<div class="docItem${activeCls}" data-id="${d.id}"><span>${(d.name||"Untitled")}</span><span class="meta">${fmt(d.updated)}${tag}</span><span class="dx" data-del="${d.id}">${ic.trash}</span></div>`;
   });
   list.innerHTML =
-    `<div class="sheetHead"><h3>Documents</h3><button class="newBtnSheet" id="newDocBtn">${ic.plus}<span>New</span></button></div>`+
-    `<div class="sheetGroup">${items||'<div class="empty">No documents yet</div>'}</div>`+
-    `<div class="sheetLabel">Open from</div>`+
-    `<div class="sheetGroup">${sources}</div>`+
-    `<div class="sheetLabel">Settings</div>`+
-    `<div class="sheetGroup"><div class="docItem" id="themeBtn">${ic.theme}<span>Theme</span><span class="meta" id="themeName"></span></div></div>`;
+    // TOP: header + scrollable document list
+    `<div class="drawerTop">`+
+      `<div class="sheetHead"><h3>Documents</h3><button class="newBtnSheet" id="newDocBtn">${ic.plus}<span>New</span></button></div>`+
+      `<div class="sheetGroup">${items||'<div class="empty">No documents yet</div>'}</div>`+
+    `</div>`+
+    // BOTTOM (pinned): sources + settings
+    `<div class="drawerBot">`+
+      `<div class="sheetLabel">Open from</div>`+
+      `<div class="sheetGroup">${sources}</div>`+
+      `<div class="sheetLabel">Settings</div>`+
+      `<div class="sheetGroup"><div class="docItem" id="themeBtn">${ic.theme}<span>Theme</span><span class="meta" id="themeName"></span></div></div>`+
+    `</div>`;
   // wire up
   $("#newDocBtn").onclick=createNewDoc;
   $("#importBtn").onclick=()=>$("#fileInput").click();
