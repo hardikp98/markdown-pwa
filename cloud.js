@@ -41,10 +41,13 @@ async function gOpen(){
         if(action===google.picker.Action.PICKED){
           const docs=data[google.picker.Response.DOCUMENTS] || data.docs;
           const f=docs[0];
-          // download raw bytes directly; supportsAllDrives covers shared/My-Drive files
-          fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media&supportsAllDrives=true`,{headers:{Authorization:"Bearer "+gToken}})
-            .then(r=>{ if(!r.ok) throw new Error("Drive download HTTP "+r.status); return r.text(); })
-            .then(text=>resolve({provider:"gdrive", id:f.id, name:f.name||(f[google.picker.Document.NAME]), content:text}))
+          // resolve the file id across possible response shapes
+          const fid = f.id || f[google.picker.Document.ID] || f.docid || f.fileId;
+          const fname = f.name || f[google.picker.Document.NAME] || "Untitled.md";
+          if(!fid){ reject(new Error("Picker returned no file id. Keys: "+Object.keys(f).join(","))); return; }
+          fetch(`https://www.googleapis.com/drive/v3/files/${fid}?alt=media&supportsAllDrives=true`,{headers:{Authorization:"Bearer "+gToken}})
+            .then(r=>{ if(!r.ok) throw new Error("Drive download HTTP "+r.status+" (id="+fid+")"); return r.text(); })
+            .then(text=>resolve({provider:"gdrive", id:fid, name:fname, content:text}))
             .catch(reject);
         } else if(action===google.picker.Action.CANCEL){ resolve(null); }
       });
