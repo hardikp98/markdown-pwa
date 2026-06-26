@@ -6,14 +6,25 @@ const C = window.MD_CONFIG || {};
 const load = src => new Promise((ok,err)=>{ const s=document.createElement("script"); s.src=src; s.async=true; s.onload=ok; s.onerror=()=>err(new Error("load "+src)); document.head.appendChild(s); });
 
 /* ============ GOOGLE DRIVE ============ */
-let gToken=null, gReady=false, gTokenClient=null;
+let gToken=null, gReady=false, gTokenClient=null, gTokenExp=0;
+const G_TOKEN_KEY="mdpwa_gtoken", G_CONSENT_KEY="mdpwa_gconsented";
+// Restore a persisted token across cold starts. GIS access tokens last ~1 hr and
+// there is no refresh token without a backend, so we cache the token + its expiry
+// and reuse it silently until it lapses. This is why sign-in stops happening on
+// every launch. Renewal after expiry is silent (prompt:"") once consent is on file.
+try{
+  const saved=JSON.parse(localStorage.getItem(G_TOKEN_KEY)||"null");
+  if(saved && saved.token && saved.exp && saved.exp > Date.now()+60000){ gToken=saved.token; gTokenExp=saved.exp; }
+}catch(e){}
+function gClearToken(){ gToken=null; gTokenExp=0; try{ localStorage.removeItem(G_TOKEN_KEY); }catch(e){} }
 async function gInit(){
-  if(gReady) return;
+  if(gReady){ if(gToken) try{ gapi.client.setToken({access_token:gToken}); }catch(e){} return; }
   if(!C.GOOGLE_CLIENT_ID) throw new Error("Google not configured");
   await load("https://accounts.google.com/gsi/client");          // GIS
   await load("https://apis.google.com/js/api.js");                // gapi (picker + drive)
   await new Promise(r=>gapi.load("client:picker", r));
   await gapi.client.init({ apiKey:C.GOOGLE_API_KEY, discoveryDocs:["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] });
+  if(gToken) gapi.client.setToken({access_token:gToken});         // hand the restored token to gapi
   gTokenClient = google.accounts.oauth2.initTokenClient({
     client_id:C.GOOGLE_CLIENT_ID, scope:"https://www.googleapis.com/auth/drive.file",
     callback:()=>{}   // set per-request
@@ -24,16 +35,31 @@ async function gInit(){
 // opts.interactive=false (background auto-save): short timeout so it can't hang the indicator.
 function gAuth(opts){
   opts=opts||{};
-  if(gToken && !opts.force) return Promise.resolve(gToken);   // reuse existing token silently
+  // Reuse the cached token only while it is still valid (60s safety margin).
+  if(gToken && gTokenExp > Date.now()+60000 && !opts.force) return Promise.resolve(gToken);
+  const stale = gToken;                          // an expired token still implies prior consent
+  if(stale) gClearToken();
   return new Promise((resolve,reject)=>{
     let done=false, timer=null;
     const finish=fn=>(...a)=>{ if(done) return; done=true; if(timer) clearTimeout(timer); fn(...a); };
     const ok=finish(resolve), bad=finish(reject);
-    gTokenClient.callback=(resp)=>{ if(resp.error) return bad(new Error(resp.error)); gToken=resp.access_token; gapi.client.setToken({access_token:gToken}); ok(gToken); };
+    gTokenClient.callback=(resp)=>{
+      if(resp.error) return bad(new Error(resp.error));
+      gToken=resp.access_token;
+      // expires_in is seconds; persist token + absolute expiry so a cold start can reuse it
+      const ttl=(parseInt(resp.expires_in,10)||3600)*1000;
+      gTokenExp=Date.now()+ttl;
+      gapi.client.setToken({access_token:gToken});
+      try{ localStorage.setItem(G_TOKEN_KEY, JSON.stringify({token:gToken, exp:gTokenExp})); localStorage.setItem(G_CONSENT_KEY,"1"); }catch(e){}
+      ok(gToken);
+    };
     gTokenClient.error_callback=(err)=>bad(new Error((err&&err.type)||"auth_failed"));
     // only background (non-interactive) calls get a timeout; interactive sign-in waits for the user
     if(!opts.interactive) timer=setTimeout(()=>bad(new Error("auth_timeout")), 12000);
-    gTokenClient.requestAccessToken({prompt: gToken?"":"consent"});
+    // Silent renewal (prompt:"") once consent is on file or we are just refreshing an expired token.
+    // Full consent screen only on the very first sign-in.
+    let consented=stale; try{ consented = consented || localStorage.getItem(G_CONSENT_KEY)==="1"; }catch(e){}
+    gTokenClient.requestAccessToken({prompt: consented?"":"consent"});
   });
 }
 // open: show Google Picker, return {id,name,content}
@@ -77,9 +103,23 @@ async function gSave(name, content, fileId, interactive){
     `--${boundary}\r\nContent-Type: text/markdown\r\n\r\n${content}\r\n--${boundary}--`;
   const path = fileId ? `/upload/drive/v3/files/${fileId}` : `/upload/drive/v3/files`;
   const method = fileId ? "PATCH" : "POST";
-  const res = await gapi.client.request({ path, method, params:{uploadType:"multipart"},
+  const doReq = ()=>gapi.client.request({ path, method, params:{uploadType:"multipart"},
     headers:{"Content-Type":`multipart/related; boundary=${boundary}`}, body });
+  let res;
+  try{ res = await doReq(); }
+  catch(e){
+    // A persisted token can be revoked or invalid server-side (401). Clear it and
+    // re-auth once, so a dead cached token never silently breaks saving.
+    const code = e && (e.status || (e.result&&e.result.error&&e.result.error.code));
+    if(code===401){ gClearToken(); await gAuth({interactive:!!interactive, force:true}); res = await doReq(); }
+    else throw e;
+  }
   return { id:res.result.id, name:res.result.name||name };
+}
+// Force a clean re-auth (revokes the cached token). Exposed for a manual "sign out".
+function gSignOut(){
+  try{ if(gToken && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(gToken,()=>{}); }catch(e){}
+  gClearToken(); try{ localStorage.removeItem(G_CONSENT_KEY); }catch(e){}
 }
 
 /* ============ ONEDRIVE ============ */
@@ -133,7 +173,7 @@ async function msSave(name, content, itemId){
 }
 
 window.Cloud = {
-  google:{ configured:()=>!!C.GOOGLE_CLIENT_ID, open:gOpen, save:gSave },
+  google:{ configured:()=>!!C.GOOGLE_CLIENT_ID, open:gOpen, save:gSave, signOut:gSignOut, signedIn:()=>!!(gToken && gTokenExp>Date.now()) },
   onedrive:{ configured:()=>!!C.MS_CLIENT_ID, list:msList, get:msGet, save:msSave }
 };
 })();

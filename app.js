@@ -352,3 +352,28 @@ if(!docs.length){
 
 /* ---------- service worker (offline) ---------- */
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
+
+/* ---------- iOS keyboard fix: keep the top bars visible ----------
+   On iOS the layout viewport does not shrink when the keyboard opens, so Safari
+   scrolls the page up and the top bar / toolbar slide off. We size the app shell
+   to visualViewport.height instead, and pin it to the viewport's top, so the bars
+   stay put and only the editor pane shrinks. No effect on desktop. */
+(function(){
+  const vv = window.visualViewport;
+  if(!vv) return;                                  // older browsers keep the dvh/% fallback
+  let raf=0;
+  function apply(){
+    raf=0;
+    document.documentElement.style.setProperty("--app-h", vv.height+"px");
+    // counter iOS scrolling the layout viewport up under the keyboard
+    document.body.style.transform = vv.offsetTop ? "translateY("+vv.offsetTop+"px)" : "";
+  }
+  function schedule(){ if(!raf) raf=requestAnimationFrame(apply); }
+  vv.addEventListener("resize", schedule);
+  vv.addEventListener("scroll", schedule);
+  // keep the caret in view after the shell resizes (textarea only)
+  document.addEventListener("focusin", function(e){
+    if(e.target && e.target.id==="src") setTimeout(schedule, 50);
+  });
+  apply();
+})();

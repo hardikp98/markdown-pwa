@@ -24,9 +24,14 @@
   html[data-theme="light"]{--bg:#fff;--panel:#f6f8fa;--bar:#eef1f4;--chip:#e7ebf0;--fg:#24292f;--muted:#6b7280;--label:#57606a;--head:#1a1d21;--accent:#0969da;--accent2:#5a3fd6;--border:#d0d7de;--codebg:#f3f5f8;}
   html[data-theme="matrix"]{--bg:#000;--panel:#020802;--bar:#000;--chip:#04210c;--fg:#00ff66;--muted:#089a3f;--label:#0a7a33;--head:#9dffae;--accent:#00ff66;--accent2:#00aa44;--border:#0c2c14;--codebg:#010601;}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{margin:0;height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--fg);
+  html,body{margin:0;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--fg);
             -webkit-text-size-adjust:100%}
-  body{display:flex;flex-direction:column;padding-top:var(--safe-top)}
+  html{height:100%}
+  /* --app-h is set in JS from visualViewport so the shell shrinks to the area
+     ABOVE the iOS keyboard. Falls back to dvh, then % for older browsers.
+     This is what keeps the top bars from scrolling off when the keyboard opens. */
+  body{height:100%;height:100dvh;height:var(--app-h,100dvh);display:flex;flex-direction:column;padding-top:var(--safe-top);
+       position:fixed;top:0;left:0;right:0;overflow:hidden}
   /* top bar */
   #bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bar);border-bottom:1px solid var(--border);flex:0 0 auto}
   #docname{flex:1;font-size:14px;font-weight:600;color:var(--head);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
