@@ -353,27 +353,44 @@ if(!docs.length){
 /* ---------- service worker (offline) ---------- */
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
 
-/* ---------- iOS keyboard fix: keep the top bars visible ----------
-   On iOS the layout viewport does not shrink when the keyboard opens, so Safari
-   scrolls the page up and the top bar / toolbar slide off. We size the app shell
-   to visualViewport.height instead, and pin it to the viewport's top, so the bars
-   stay put and only the editor pane shrinks. No effect on desktop. */
+/* ---------- iOS keyboard fix: lock the top bars in place ----------
+   When the keyboard opens, iOS force-scrolls the whole web view up to reveal the
+   focused input, which drags the top bar + toolbar off-screen. Two parts:
+   1) Hard scroll-lock: whenever iOS tries to scroll the window, snap it back to
+      0,0. The app never wants window scroll; all scrolling lives inside #src/#pv.
+   2) Size the shell to visualViewport.height so #main shrinks to the area above
+      the keyboard. The textarea has its own internal scroll, so the caret stays
+      visible by scrolling INSIDE the editor, not by moving the page. */
 (function(){
-  const vv = window.visualViewport;
-  if(!vv) return;                                  // older browsers keep the dvh/% fallback
-  let raf=0;
-  function apply(){
-    raf=0;
-    document.documentElement.style.setProperty("--app-h", vv.height+"px");
-    // counter iOS scrolling the layout viewport up under the keyboard
-    document.body.style.transform = vv.offsetTop ? "translateY("+vv.offsetTop+"px)" : "";
+  // 1) Lock the window to the top. This is what actually stops the bars sliding away.
+  function lockTop(){
+    if(window.pageYOffset!==0 || window.pageXOffset!==0) window.scrollTo(0,0);
+    // some iOS builds scroll the documentElement instead of the window
+    if(document.scrollingElement && document.scrollingElement.scrollTop!==0)
+      document.scrollingElement.scrollTop=0;
   }
-  function schedule(){ if(!raf) raf=requestAnimationFrame(apply); }
-  vv.addEventListener("resize", schedule);
-  vv.addEventListener("scroll", schedule);
-  // keep the caret in view after the shell resizes (textarea only)
+  window.addEventListener("scroll", lockTop, {passive:true});
+  window.addEventListener("touchmove", lockTop, {passive:true});
+
+  const vv = window.visualViewport;
+  if(vv){                                          // older browsers keep the dvh/% fallback
+    let raf=0;
+    function apply(){
+      raf=0;
+      document.documentElement.style.setProperty("--app-h", vv.height+"px");
+      lockTop();
+    }
+    function schedule(){ if(!raf) raf=requestAnimationFrame(apply); }
+    vv.addEventListener("resize", schedule);
+    vv.addEventListener("scroll", schedule);
+    apply();
+  }
+
+  // On focus, snap back a few times: iOS fires its auto-scroll slightly after
+  // focus, so one snap is not enough. The editor keeps the caret visible itself.
   document.addEventListener("focusin", function(e){
-    if(e.target && e.target.id==="src") setTimeout(schedule, 50);
+    if(e.target && (e.target.id==="src" || e.target.tagName==="INPUT" || e.target.tagName==="TEXTAREA")){
+      [0,60,150,300].forEach(function(t){ setTimeout(lockTop, t); });
+    }
   });
-  apply();
 })();
