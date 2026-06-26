@@ -111,6 +111,7 @@ function persistActive(){ const d=active(); if(d){ d.content=src.value; d.update
 let saveTimer=null, cloudTimer=null, cloudSaving=false, cloudDirty=false;
 src.addEventListener("input",()=>{
   render();
+  pushHistorySoon();   // coalesce edits into chunked undo entries
   clearTimeout(saveTimer); saveTimer=setTimeout(persistActive,400);   // autosave to phone
   const d=active();
   if(d && (d.provider==="gdrive"||d.provider==="onedrive")){           // autosave to cloud
@@ -157,6 +158,33 @@ function toast(msg){ const s=$("#status"); s.textContent=msg; s.classList.add("s
 $("#segEdit").onclick=()=>{ document.body.classList.remove("view-preview"); $("#segEdit").classList.add("active"); $("#segView").classList.remove("active"); };
 $("#segView").onclick=()=>{ render(); document.body.classList.add("view-preview"); $("#segView").classList.add("active"); $("#segEdit").classList.remove("active"); };
 
+/* ---------- undo / redo (app-managed history) ----------
+   document.execCommand("undo") cannot work here: toolbar actions assign src.value
+   directly, which wipes the browser's native undo stack. We keep our own per-doc
+   history of {value,s,e}. Typing is coalesced so one undo reverts a chunk. */
+const HIST={};   // docId -> { stack:[{value,s,e}], idx }
+let histTyping=null, applyingHist=false;
+function hist(){ const d=active(); if(!d) return null; if(!HIST[d.id]) HIST[d.id]={stack:[{value:src.value,s:0,e:0}],idx:0}; return HIST[d.id]; }
+function pushHistory(){
+  if(applyingHist) return; const h=hist(); if(!h) return;
+  const top=h.stack[h.idx];
+  if(top && top.value===src.value){ top.s=src.selectionStart; top.e=src.selectionEnd; return; }
+  h.stack=h.stack.slice(0,h.idx+1);
+  h.stack.push({value:src.value,s:src.selectionStart,e:src.selectionEnd});
+  if(h.stack.length>200) h.stack.shift();
+  h.idx=h.stack.length-1;
+}
+function pushHistorySoon(){ clearTimeout(histTyping); histTyping=setTimeout(pushHistory,350); }
+function restoreHist(snap){
+  applyingHist=true;
+  src.value=snap.value; render();
+  const d=active(); if(d){ d.content=src.value; d.updated=Date.now(); saveDocs(docs); }
+  try{ src.focus(); src.selectionStart=snap.s; src.selectionEnd=snap.e; }catch(_){}
+  applyingHist=false;
+}
+function doUndo(){ clearTimeout(histTyping); pushHistory(); const h=hist(); if(!h||h.idx<=0) return; h.idx--; restoreHist(h.stack[h.idx]); }
+function doRedo(){ const h=hist(); if(!h||h.idx>=h.stack.length-1) return; h.idx++; restoreHist(h.stack[h.idx]); }
+
 /* ---------- formatting toolbar ---------- */
 function getSel(){ return {s:src.selectionStart,e:src.selectionEnd,val:src.value}; }
 function setSel(a,b){ src.focus(); src.selectionStart=a; src.selectionEnd=(b===undefined?a:b); }
@@ -170,8 +198,8 @@ function linePrefix(p,num){ const{s,e,val}=getSel();
 function insert(t,back){ const{s,val}=getSel(); src.value=val.slice(0,s)+t+val.slice(src.selectionEnd);
   setSel(s+t.length-(back||0)); fireInput(); }
 const ACT={
-  undo:()=>{src.focus();document.execCommand("undo");fireInput();},
-  redo:()=>{src.focus();document.execCommand("redo");fireInput();},
+  undo:()=>doUndo(),
+  redo:()=>doRedo(),
   h1:()=>linePrefix("# "),h2:()=>linePrefix("## "),
   bold:()=>wrap("**","**"),italic:()=>wrap("_","_"),strike:()=>wrap("~~","~~"),
   highlight:()=>wrap("==","=="),code:()=>wrap("`","`"),
