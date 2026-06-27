@@ -111,7 +111,8 @@
   .docItem>span:first-child{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .docItem.active>span:first-child{color:var(--accent);font-weight:600}
   .docItem svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;color:var(--muted)}
-  /* Drive folder-browser nav row (Up + Documents) */
+  /* Drive folder-browser: pinned nav at top, scrollable list below */
+  .drawerPin{flex:0 0 auto;padding:8px 12px 0}
   .gnav{display:flex;gap:8px;margin:4px 0 2px}
   .gnav .gNavBtn{flex:1;justify-content:center;background:var(--chip);border:1px solid var(--border);border-radius:10px;font-size:14px;font-weight:600}
   .docItem .meta{flex:0 0 auto;color:var(--muted);font-size:12px;margin-left:auto}

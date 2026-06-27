@@ -333,26 +333,36 @@ $("#fileInput").addEventListener("change",e=>{
 // Google Drive folder browser. No Picker (its iframe needs third-party cookies
 // that iOS blocks). We list folders + .md files in a folder using the token we
 // already hold, and let the user navigate in/up. "Documents" exits to the docs list.
+const GDRIVE_LAST="mdpwa_gdrive_last";   // remember the folder you were last in
 async function gBrowse(folderId, folderName){
   const list=$("#docList");
   toast("Loading Drive…");
   let entries;
   try{ entries=await Cloud.google.list(folderId); }
-  catch(e){ alert("Google Drive error:\n"+(e&&(e.message||e.error||JSON.stringify(e))||e)); return; }
+  catch(e){
+    alert("Google Drive error:\n"+(e&&(e.message||e.error||JSON.stringify(e))||e));
+    // a saved folder may have been deleted/moved; fall back to root once
+    if(folderId && folderId!=="root"){ try{ localStorage.removeItem(GDRIVE_LAST); }catch(_){} return gBrowse("root",null); }
+    return;
+  }
   const fid=folderId||"root";
   const crumb = fid==="root" ? "My Drive" : (folderName||"Folder");
-  // header: Up (parent) when not at root, and always a Documents exit
-  let head=`<div class="gnav">`;
-  if(fid!=="root") head+=`<button class="docItem gNavBtn" id="gUp">${ic.docs}<span>↑ Up</span></button>`;
-  head+=`<button class="docItem gNavBtn" id="gDocs">${ic.menu}<span>Documents</span></button></div>`+
-        `<div class="sheetLabel">${crumb}</div>`;
+  // remember where we are, so reopening Drive lands here
+  try{ localStorage.setItem(GDRIVE_LAST, JSON.stringify({id:fid, name:folderName||null})); }catch(_){}
+  // pinned nav row (Up + Documents) stays put; the list below scrolls
+  let nav=`<div class="gnav">`;
+  if(fid!=="root") nav+=`<button class="docItem gNavBtn" id="gUp">${ic.docs}<span>↑ Up</span></button>`;
+  nav+=`<button class="docItem gNavBtn" id="gDocs">${ic.menu}<span>Documents</span></button></div>`;
   const rows = entries.length
     ? entries.map(f=> f.isFolder
         ? `<div class="docItem" data-folder="${f.id}" data-name="${(f.name||"").replace(/"/g,"&quot;")}">${ic.docs}<span>${f.name}</span><span class="meta">folder ›</span></div>`
         : `<div class="docItem" data-file="${f.id}"><span>${f.name}</span><span class="meta">.md</span></div>`
       ).join("")
     : `<div class="empty">No folders or markdown files here</div>`;
-  list.innerHTML = head + `<div class="sheetGroup">${rows}</div>`;
+  // structure mirrors renderDocList: pinned top (nav), scrollable middle (.drawerTop)
+  list.innerHTML =
+    `<div class="drawerPin">${nav}<div class="sheetLabel">${crumb}</div></div>`+
+    `<div class="drawerTop"><div class="sheetGroup">${rows}</div></div>`;
   const up=$("#gUp"); if(up) up.onclick=async()=>{ const p=await Cloud.google.parent(fid); gBrowse(p, null); };
   $("#gDocs").onclick=renderDocList;
   list.querySelectorAll("[data-folder]").forEach(el=>el.onclick=()=>gBrowse(el.dataset.folder, el.dataset.name));
@@ -362,7 +372,12 @@ async function gBrowse(folderId, folderName){
     catch(e){ alert("Google Drive error:\n"+(e.message||e)); }
   });
 }
-async function openFromGoogle(){ gBrowse("root", null); }
+async function openFromGoogle(){
+  // reopen where you left off (falls back to root if unset or stale)
+  let last={id:"root",name:null};
+  try{ const s=JSON.parse(localStorage.getItem(GDRIVE_LAST)||"null"); if(s&&s.id) last=s; }catch(_){}
+  gBrowse(last.id, last.name);
+}
 async function openFromOneDrive(){
   try{ toast("Loading OneDrive…"); const files=await Cloud.onedrive.list();
     if(!files.length){ alert("No .md files found in your OneDrive."); return; }
