@@ -2,6 +2,14 @@
    (which exposes Google Drive, OneDrive, iCloud). No server. */
 'use strict';
 const $ = s => document.querySelector(s);
+// Visible error reporter (phones have no console). Shows the real error on-screen
+// so a silent failure becomes a readable message instead of "doesn't work".
+window.addEventListener("error", e=>{
+  try{ const s=document.querySelector("#status"); if(s){ s.textContent="ERR: "+(e.message||e.error||"unknown"); s.classList.add("show"); s.style.color="#f48771"; } }catch(_){}
+});
+window.addEventListener("unhandledrejection", e=>{
+  try{ const s=document.querySelector("#status"); if(s){ s.textContent="ERR: "+((e.reason&&(e.reason.message||e.reason))||"promise"); s.classList.add("show"); s.style.color="#f48771"; } }catch(_){}
+});
 const SVG = p => `<svg viewBox="0 0 24 24">${p}</svg>`;
 const ic = {
   menu:SVG('<path d="M4 6h16M4 12h16M4 18h16"/>'),
@@ -114,9 +122,10 @@ function persistActive(){ const d=active(); if(d){ d.content=src.value; d.update
 
 let saveTimer=null, cloudTimer=null, cloudSaving=false, cloudDirty=false;
 src.addEventListener("input",()=>{
-  render();
-  pushHistorySoon();   // coalesce edits into chunked undo entries
-  clearTimeout(saveTimer); saveTimer=setTimeout(persistActive,400);   // autosave to phone
+  try{ render(); }catch(_){}
+  try{ pushHistorySoon(); }catch(_){}   // undo history must never block autosave
+  // autosave to phone — this is critical, keep it outside any try that could skip it
+  clearTimeout(saveTimer); saveTimer=setTimeout(persistActive,400);
   const d=active();
   if(d && (d.provider==="gdrive"||d.provider==="onedrive")){           // autosave to cloud
     cloudDirty=true;
@@ -240,6 +249,7 @@ function createNewDoc(){
 /* ---------- top bar icons ---------- */
 $("#menuBtn").innerHTML=ic.menu; $("#saveBtn").innerHTML=ic.save;
 $("#newBtn").innerHTML=ic.plus; $("#newBtn").onclick=createNewDoc;
+$("#saveBtn").onclick=saveDoc;   // wired here (with the other top-bar buttons) so a later throw can't skip it
 // tap the title to rename the current doc
 docname.style.cursor="pointer"; docname.title="Tap to rename";
 docname.onclick=()=>{
