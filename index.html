@@ -112,9 +112,15 @@
   .docItem.active>span:first-child{color:var(--accent);font-weight:600}
   .docItem svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;color:var(--muted)}
   /* Drive folder-browser: pinned nav at top, scrollable list below */
-  .drawerPin{flex:0 0 auto;padding:8px 12px 0}
-  .gnav{display:flex;gap:8px;margin:4px 0 2px}
-  .gnav .gNavBtn{flex:1;justify-content:center;background:var(--chip);border:1px solid var(--border);border-radius:10px;font-size:14px;font-weight:600}
+  .drawerPin{flex:0 0 auto;padding:8px 12px 6px}
+  .gnav{display:flex;align-items:center;gap:6px}
+  .gNavBtn{flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0;
+       background:var(--chip);border:1px solid var(--border);border-radius:9px;color:var(--fg);cursor:pointer}
+  .gNavBtn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .gNavBtn:active{filter:brightness(1.2)}
+  .gNavBtn:disabled{opacity:.35;cursor:default}
+  .gCrumb{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+       font-size:13px;font-weight:600;color:var(--head);text-align:center;padding:0 4px}
   .docItem .meta{flex:0 0 auto;color:var(--muted);font-size:12px;margin-left:auto}
   .docItem .meta{flex:0 0 auto;font-size:12px;color:var(--muted)}
   .docItem .dx{flex:0 0 auto;color:var(--muted);padding:4px 6px}

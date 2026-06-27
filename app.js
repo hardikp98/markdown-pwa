@@ -5,6 +5,10 @@ const $ = s => document.querySelector(s);
 const SVG = p => `<svg viewBox="0 0 24 24">${p}</svg>`;
 const ic = {
   menu:SVG('<path d="M4 6h16M4 12h16M4 18h16"/>'),
+  navBack:SVG('<path d="M15 18l-6-6 6-6"/>'),
+  navFwd:SVG('<path d="M9 6l6 6-6 6"/>'),
+  navUp:SVG('<path d="M12 19V5M6 11l6-6 6 6"/>'),
+  navHome:SVG('<path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/>'),
   docs:SVG('<path d="M4 4h9l2 2h5a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/>'),
   save:SVG('<path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/>'),
   undo:SVG('<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/>'),
@@ -334,38 +338,51 @@ $("#fileInput").addEventListener("change",e=>{
 // that iOS blocks). We list folders + .md files in a folder using the token we
 // already hold, and let the user navigate in/up. "Documents" exits to the docs list.
 const GDRIVE_LAST="mdpwa_gdrive_last";   // remember the folder you were last in
-async function gBrowse(folderId, folderName){
+// In-session navigation history for back/forward. Each item: {id, name}.
+let gHist=[], gHi=-1;
+// mode: "push" (normal click), "back", "forward". back/forward just move gHi.
+async function gBrowse(folderId, folderName, mode){
   const list=$("#docList");
   toast("Loading Drive…");
   let entries;
   try{ entries=await Cloud.google.list(folderId); }
   catch(e){
     alert("Google Drive error:\n"+(e&&(e.message||e.error||JSON.stringify(e))||e));
-    // a saved folder may have been deleted/moved; fall back to root once
-    if(folderId && folderId!=="root"){ try{ localStorage.removeItem(GDRIVE_LAST); }catch(_){} return gBrowse("root",null); }
+    if(folderId && folderId!=="root"){ try{ localStorage.removeItem(GDRIVE_LAST); }catch(_){} return gBrowse("root",null,"push"); }
     return;
   }
   const fid=folderId||"root";
   const crumb = fid==="root" ? "My Drive" : (folderName||"Folder");
-  // remember where we are, so reopening Drive lands here
+  // maintain history
+  if(mode==="back"){ gHi=Math.max(0,gHi-1); }
+  else if(mode==="forward"){ gHi=Math.min(gHist.length-1,gHi+1); }
+  else { gHist=gHist.slice(0,gHi+1); gHist.push({id:fid,name:folderName||null}); gHi=gHist.length-1; }
   try{ localStorage.setItem(GDRIVE_LAST, JSON.stringify({id:fid, name:folderName||null})); }catch(_){}
-  // pinned nav row (Up + Documents) stays put; the list below scrolls
-  let nav=`<div class="gnav">`;
-  if(fid!=="root") nav+=`<button class="docItem gNavBtn" id="gUp">${ic.docs}<span>↑ Up</span></button>`;
-  nav+=`<button class="docItem gNavBtn" id="gDocs">${ic.menu}<span>Documents</span></button></div>`;
+  const canBack=gHi>0, canFwd=gHi<gHist.length-1, canUp=fid!=="root";
+  // compact icon-only nav row
+  const nav=`<div class="gnav">`+
+    `<button class="gNavBtn" id="gBack" ${canBack?"":"disabled"} title="Back">${ic.navBack}</button>`+
+    `<button class="gNavBtn" id="gFwd" ${canFwd?"":"disabled"} title="Forward">${ic.navFwd}</button>`+
+    `<button class="gNavBtn" id="gUp" ${canUp?"":"disabled"} title="Up one folder">${ic.navUp}</button>`+
+    `<button class="gNavBtn" id="gHome" title="My Drive">${ic.navHome}</button>`+
+    `<span class="gCrumb">${crumb}</span>`+
+    `<button class="gNavBtn" id="gDocs" title="Back to Documents">${ic.menu}</button>`+
+    `</div>`;
   const rows = entries.length
     ? entries.map(f=> f.isFolder
-        ? `<div class="docItem" data-folder="${f.id}" data-name="${(f.name||"").replace(/"/g,"&quot;")}">${ic.docs}<span>${f.name}</span><span class="meta">folder ›</span></div>`
+        ? `<div class="docItem" data-folder="${f.id}" data-name="${(f.name||"").replace(/"/g,"&quot;")}">${ic.docs}<span>${f.name}</span><span class="meta">›</span></div>`
         : `<div class="docItem" data-file="${f.id}"><span>${f.name}</span><span class="meta">.md</span></div>`
       ).join("")
     : `<div class="empty">No folders or markdown files here</div>`;
-  // structure mirrors renderDocList: pinned top (nav), scrollable middle (.drawerTop)
   list.innerHTML =
-    `<div class="drawerPin">${nav}<div class="sheetLabel">${crumb}</div></div>`+
+    `<div class="drawerPin">${nav}</div>`+
     `<div class="drawerTop"><div class="sheetGroup">${rows}</div></div>`;
-  const up=$("#gUp"); if(up) up.onclick=async()=>{ const p=await Cloud.google.parent(fid); gBrowse(p, null); };
+  const back=$("#gBack"); if(back&&canBack) back.onclick=()=>{ const t=gHist[gHi-1]; gBrowse(t.id,t.name,"back"); };
+  const fwd=$("#gFwd"); if(fwd&&canFwd) fwd.onclick=()=>{ const t=gHist[gHi+1]; gBrowse(t.id,t.name,"forward"); };
+  const up=$("#gUp"); if(up&&canUp) up.onclick=async()=>{ const p=await Cloud.google.parent(fid); gBrowse(p, null, "push"); };
+  $("#gHome").onclick=()=>gBrowse("root", null, "push");
   $("#gDocs").onclick=renderDocList;
-  list.querySelectorAll("[data-folder]").forEach(el=>el.onclick=()=>gBrowse(el.dataset.folder, el.dataset.name));
+  list.querySelectorAll("[data-folder]").forEach(el=>el.onclick=()=>gBrowse(el.dataset.folder, el.dataset.name, "push"));
   list.querySelectorAll("[data-file]").forEach(el=>el.onclick=async()=>{
     try{ toast("Downloading…"); const f=await Cloud.google.get(el.dataset.file);
       adoptCloudDoc("gdrive",f.id,f.name,f.content); closeSheets(); $("#segEdit").click(); toast("Opened "+f.name); }
@@ -376,7 +393,8 @@ async function openFromGoogle(){
   // reopen where you left off (falls back to root if unset or stale)
   let last={id:"root",name:null};
   try{ const s=JSON.parse(localStorage.getItem(GDRIVE_LAST)||"null"); if(s&&s.id) last=s; }catch(_){}
-  gBrowse(last.id, last.name);
+  gHist=[]; gHi=-1;   // fresh history each time the browser opens
+  gBrowse(last.id, last.name, "push");
 }
 async function openFromOneDrive(){
   try{ toast("Loading OneDrive…"); const files=await Cloud.onedrive.list();
