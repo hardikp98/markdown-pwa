@@ -17,6 +17,7 @@ const ic = {
   navFwd:SVG('<path d="M9 6l6 6-6 6"/>'),
   navUp:SVG('<path d="M12 19V5M6 11l6-6 6 6"/>'),
   navHome:SVG('<path d="M4 11l8-7 8 7M6 10v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/>'),
+  image:SVG('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5L5 20"/>'),
   docs:SVG('<path d="M4 4h9l2 2h5a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/>'),
   save:SVG('<path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/>'),
   undo:SVG('<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/>'),
@@ -210,6 +211,42 @@ function linePrefix(p,num){ const{s,e,val}=getSel();
   src.value=val.slice(0,ls)+out+val.slice(le); setSel(ls,ls+out.length); fireInput(); }
 function insert(t,back){ const{s,val}=getSel(); src.value=val.slice(0,s)+t+val.slice(src.selectionEnd);
   setSel(s+t.length-(back||0)); fireInput(); }
+// Insert an image. No backend to host it, so we downsize the photo on a canvas
+// (max 1200px, JPEG quality .82) and embed it as a data-URI right in the markdown.
+// Fully offline, renders here and in the desktop editor. ~100-400KB of text each.
+const IMG_MAX=1200, IMG_Q=0.82;
+function pickAndInsertImage(){
+  const inp=$("#imgInput"); if(!inp) return;
+  inp.value="";
+  inp.onchange=()=>{
+    const file=inp.files&&inp.files[0]; if(!file) return;
+    if(!/^image\//.test(file.type)){ toast("Not an image"); return; }
+    toast("Adding image…");
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        let {width:w,height:h}=img;
+        if(w>IMG_MAX||h>IMG_MAX){ const s=IMG_MAX/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+        const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+        cv.getContext("2d").drawImage(img,0,0,w,h);
+        // PNG with transparency stays PNG; everything else compresses to JPEG
+        const isPng=/png$/i.test(file.type);
+        let data; try{ data=cv.toDataURL(isPng?"image/png":"image/jpeg", IMG_Q); }
+        catch(e){ toast("Image too large to embed"); return; }
+        const alt=(file.name||"image").replace(/\.[^.]+$/,"").replace(/[\[\]]/g,"");
+        const kb=Math.round(data.length/1024);
+        insert(`\n![${alt}](${data})\n`);
+        toast("Image added ("+kb+" KB)");
+      };
+      img.onerror=()=>toast("Could not read image");
+      img.src=reader.result;
+    };
+    reader.onerror=()=>toast("Could not read file");
+    reader.readAsDataURL(file);
+  };
+  inp.click();
+}
 const ACT={
   undo:()=>doUndo(),
   redo:()=>doRedo(),
@@ -218,11 +255,12 @@ const ACT={
   highlight:()=>wrap("==","=="),code:()=>wrap("`","`"),
   ul:()=>linePrefix("- "),ol:()=>linePrefix("",true),task:()=>linePrefix("- [ ] "),quote:()=>linePrefix("> "),
   link:()=>{const{s,e,val}=getSel();const sel=val.slice(s,e)||"text";insert(`[${sel}](url)`,4);},
+  image:()=>pickAndInsertImage(),
   table:()=>insert("\n| A | B |\n| --- | --- |\n| 1 | 2 |\n"),
   codeblk:()=>insert("\n```\n\n```\n",5),
   symbols:()=>toggleSymbolBar()
 };
-const TOOLS=[["undo"],["redo"],["sep"],["h1"],["h2"],["bold"],["italic"],["strike"],["highlight"],["code"],["sep"],["ul"],["ol"],["task"],["quote"],["symbols"],["sep"],["link"],["table"],["codeblk"]];
+const TOOLS=[["undo"],["redo"],["sep"],["h1"],["h2"],["bold"],["italic"],["strike"],["highlight"],["code"],["sep"],["ul"],["ol"],["task"],["quote"],["symbols"],["sep"],["link"],["image"],["table"],["codeblk"]];
 $("#tools").innerHTML = TOOLS.map(t=> t[0]==="sep" ? '<span class="sep"></span>' : `<button data-act="${t[0]}">${ic[t[0]]}</button>`).join("");
 $("#tools").addEventListener("click",e=>{ const b=e.target.closest("[data-act]"); if(b&&ACT[b.dataset.act]) ACT[b.dataset.act](); });
 
