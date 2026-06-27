@@ -10,7 +10,7 @@ let gToken=null, gReady=false, gTokenClient=null, gTokenExp=0;
 const G_TOKEN_KEY="mdpwa_gtoken", G_CONSENT_KEY="mdpwa_gconsented";
 // Bump when the requested OAuth scope changes. A token cached under an older
 // scope version is discarded so a fresh consent fires for the new scope.
-const G_SCOPE_VER="2-readonly";
+const G_SCOPE_VER="3-drive-rw";
 // Restore a persisted token across cold starts. GIS access tokens last ~1 hr and
 // there is no refresh token without a backend, so we cache the token + its expiry
 // and reuse it silently until it lapses. This is why sign-in stops happening on
@@ -30,11 +30,12 @@ async function gInit(){
   await gapi.client.init({ apiKey:C.GOOGLE_API_KEY, discoveryDocs:["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] });
   if(gToken) gapi.client.setToken({access_token:gToken});         // hand the restored token to gapi
   gTokenClient = google.accounts.oauth2.initTokenClient({
-    // drive.readonly: browse + open ANY file in the user's Drive (folder browser).
-    // drive.file (the old narrow scope) only saw app-created files. We still write
-    // via the same token; saves create/update files this app touches.
+    // Full drive scope: browse, open, AND save back to ANY file in the user's
+    // Drive (edit in place). drive.file alone could only write app-created files,
+    // so editing a browsed file failed with 403 ("Cloud save failed"). This is the
+    // permission "edit my Drive files" actually requires.
     client_id:C.GOOGLE_CLIENT_ID,
-    scope:"https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file",
+    scope:"https://www.googleapis.com/auth/drive",
     callback:()=>{}   // set per-request
   });
   gReady=true;
