@@ -94,6 +94,34 @@ async function gOpen(){
     picker.setVisible(true);
   });
 }
+// list: Drive files this app can see, NEWEST first. No Picker, no iframe, no
+// third-party cookies, so it works on iOS where the Picker is blocked.
+// NOTE: with drive.file scope this returns only files THIS APP created or that
+// you previously opened. It is not your whole Drive. That is the scope tradeoff.
+async function gList(){
+  await gInit(); await gAuth({interactive:true});
+  const run=()=>gapi.client.request({ path:"/drive/v3/files", method:"GET", params:{
+    q:"trashed=false and (mimeType='text/markdown' or mimeType='text/plain' or name contains '.md')",
+    orderBy:"modifiedTime desc", pageSize:100,
+    fields:"files(id,name,modifiedTime,mimeType)", spaces:"drive" } });
+  let res;
+  try{ res=await run(); }
+  catch(e){ const code=e&&(e.status||(e.result&&e.result.error&&e.result.error.code));
+    if(code===401){ gClearToken(); await gAuth({interactive:true,force:true}); res=await run(); } else throw e; }
+  return (res.result.files||[]).map(f=>({id:f.id,name:f.name,modified:f.modifiedTime}));
+}
+// get: download one file's content by id (token auth, no cookies)
+async function gGet(id){
+  await gInit(); await gAuth({interactive:true});
+  const r=await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media&supportsAllDrives=true`,
+    {headers:{Authorization:"Bearer "+gToken}});
+  if(!r.ok) throw new Error("Drive download HTTP "+r.status);
+  const text=await r.text();
+  // fetch the name separately (files.list already had it, but get-by-id is safe)
+  let name="Untitled.md";
+  try{ const m=await gapi.client.request({path:`/drive/v3/files/${id}`,params:{fields:"name"}}); name=m.result.name||name; }catch(e){}
+  return {provider:"gdrive", id, name, content:text};
+}
 // save: update existing file (by id) or create new in Drive
 async function gSave(name, content, fileId, interactive){
   await gInit(); await gAuth({interactive:!!interactive});
@@ -173,7 +201,7 @@ async function msSave(name, content, itemId){
 }
 
 window.Cloud = {
-  google:{ configured:()=>!!C.GOOGLE_CLIENT_ID, open:gOpen, save:gSave, signOut:gSignOut, signedIn:()=>!!(gToken && gTokenExp>Date.now()) },
+  google:{ configured:()=>!!C.GOOGLE_CLIENT_ID, list:gList, get:gGet, open:gOpen, save:gSave, signOut:gSignOut, signedIn:()=>!!(gToken && gTokenExp>Date.now()) },
   onedrive:{ configured:()=>!!C.MS_CLIENT_ID, list:msList, get:msGet, save:msSave }
 };
 })();

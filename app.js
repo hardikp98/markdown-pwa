@@ -331,10 +331,26 @@ $("#fileInput").addEventListener("change",e=>{
 
 /* ---------- open from clouds ---------- */
 async function openFromGoogle(){
+  // Use our own file list (Drive files.list) instead of the Google Picker.
+  // The Picker runs in an iframe that needs third-party cookies, which iOS
+  // Safari blocks ("Can't access your Google Account"). A direct list call
+  // uses the token we already hold, so it works on iPhone.
   try{
-    toast("Opening Google Drive…");
-    const f=await Cloud.google.open();
-    if(f){ adoptCloudDoc("gdrive",f.id,f.name,f.content); closeSheets(); $("#segEdit").click(); toast("Opened "+f.name); }
+    toast("Loading Google Drive…");
+    const files=await Cloud.google.list();
+    if(!files.length){
+      alert("No markdown files visible yet.\n\nThis app sees only files it created or that you opened here before (Google 'drive.file' scope). New files you Save to Drive from this app will show up here.");
+      return;
+    }
+    const list=$("#docList");
+    list.innerHTML=`<div class="docItem" id="gBack">${ic.docs}<span>← Back</span></div>`+
+      files.map(f=>`<div class="docItem" data-gd="${f.id}"><span>${f.name}</span></div>`).join("");
+    $("#gBack").onclick=renderDocList;
+    list.querySelectorAll("[data-gd]").forEach(el=>el.onclick=async()=>{
+      try{ toast("Downloading…"); const f=await Cloud.google.get(el.dataset.gd);
+        adoptCloudDoc("gdrive",f.id,f.name,f.content); closeSheets(); $("#segEdit").click(); toast("Opened "+f.name); }
+      catch(e){ alert("Google Drive error:\n"+(e.message||e)); }
+    });
   }
   catch(e){ alert("Google Drive error:\n"+(e&&(e.message||e.error||JSON.stringify(e))||e)); }
 }
