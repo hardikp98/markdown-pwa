@@ -8,13 +8,17 @@ const load = src => new Promise((ok,err)=>{ const s=document.createElement("scri
 /* ============ GOOGLE DRIVE ============ */
 let gToken=null, gReady=false, gTokenClient=null, gTokenExp=0;
 const G_TOKEN_KEY="mdpwa_gtoken", G_CONSENT_KEY="mdpwa_gconsented";
+// Bump when the requested OAuth scope changes. A token cached under an older
+// scope version is discarded so a fresh consent fires for the new scope.
+const G_SCOPE_VER="2-readonly";
 // Restore a persisted token across cold starts. GIS access tokens last ~1 hr and
 // there is no refresh token without a backend, so we cache the token + its expiry
 // and reuse it silently until it lapses. This is why sign-in stops happening on
 // every launch. Renewal after expiry is silent (prompt:"") once consent is on file.
 try{
   const saved=JSON.parse(localStorage.getItem(G_TOKEN_KEY)||"null");
-  if(saved && saved.token && saved.exp && saved.exp > Date.now()+60000){ gToken=saved.token; gTokenExp=saved.exp; }
+  if(saved && saved.token && saved.exp && saved.exp > Date.now()+60000 && saved.scope===G_SCOPE_VER){ gToken=saved.token; gTokenExp=saved.exp; }
+  else if(saved && saved.scope!==G_SCOPE_VER){ try{ localStorage.removeItem(G_TOKEN_KEY); localStorage.removeItem(G_CONSENT_KEY); }catch(e){} }
 }catch(e){}
 function gClearToken(){ gToken=null; gTokenExp=0; try{ localStorage.removeItem(G_TOKEN_KEY); }catch(e){} }
 async function gInit(){
@@ -26,7 +30,11 @@ async function gInit(){
   await gapi.client.init({ apiKey:C.GOOGLE_API_KEY, discoveryDocs:["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] });
   if(gToken) gapi.client.setToken({access_token:gToken});         // hand the restored token to gapi
   gTokenClient = google.accounts.oauth2.initTokenClient({
-    client_id:C.GOOGLE_CLIENT_ID, scope:"https://www.googleapis.com/auth/drive.file",
+    // drive.readonly: browse + open ANY file in the user's Drive (folder browser).
+    // drive.file (the old narrow scope) only saw app-created files. We still write
+    // via the same token; saves create/update files this app touches.
+    client_id:C.GOOGLE_CLIENT_ID,
+    scope:"https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file",
     callback:()=>{}   // set per-request
   });
   gReady=true;
@@ -50,7 +58,7 @@ function gAuth(opts){
       const ttl=(parseInt(resp.expires_in,10)||3600)*1000;
       gTokenExp=Date.now()+ttl;
       gapi.client.setToken({access_token:gToken});
-      try{ localStorage.setItem(G_TOKEN_KEY, JSON.stringify({token:gToken, exp:gTokenExp})); localStorage.setItem(G_CONSENT_KEY,"1"); }catch(e){}
+      try{ localStorage.setItem(G_TOKEN_KEY, JSON.stringify({token:gToken, exp:gTokenExp, scope:G_SCOPE_VER})); localStorage.setItem(G_CONSENT_KEY,"1"); }catch(e){}
       ok(gToken);
     };
     gTokenClient.error_callback=(err)=>bad(new Error((err&&err.type)||"auth_failed"));
@@ -94,21 +102,35 @@ async function gOpen(){
     picker.setVisible(true);
   });
 }
-// list: Drive files this app can see, NEWEST first. No Picker, no iframe, no
-// third-party cookies, so it works on iOS where the Picker is blocked.
-// NOTE: with drive.file scope this returns only files THIS APP created or that
-// you previously opened. It is not your whole Drive. That is the scope tradeoff.
-async function gList(){
+// list: browse a Drive FOLDER (default root). Returns folders + markdown files,
+// folders first, each marked isFolder. No Picker, no iframe, no third-party
+// cookies, so it works on iOS. drive.readonly scope sees the whole Drive.
+// folderId defaults to "root".
+async function gList(folderId){
   await gInit(); await gAuth({interactive:true});
+  const parent = folderId || "root";
+  const q = `'${parent}' in parents and trashed=false and (`+
+    `mimeType='application/vnd.google-apps.folder' or `+
+    `mimeType='text/markdown' or mimeType='text/plain' or name contains '.md')`;
   const run=()=>gapi.client.request({ path:"/drive/v3/files", method:"GET", params:{
-    q:"trashed=false and (mimeType='text/markdown' or mimeType='text/plain' or name contains '.md')",
-    orderBy:"modifiedTime desc", pageSize:100,
-    fields:"files(id,name,modifiedTime,mimeType)", spaces:"drive" } });
+    q, orderBy:"folder,name", pageSize:200,
+    fields:"files(id,name,modifiedTime,mimeType,parents)", spaces:"drive" } });
   let res;
   try{ res=await run(); }
   catch(e){ const code=e&&(e.status||(e.result&&e.result.error&&e.result.error.code));
     if(code===401){ gClearToken(); await gAuth({interactive:true,force:true}); res=await run(); } else throw e; }
-  return (res.result.files||[]).map(f=>({id:f.id,name:f.name,modified:f.modifiedTime}));
+  return (res.result.files||[]).map(f=>({
+    id:f.id, name:f.name, modified:f.modifiedTime,
+    isFolder:f.mimeType==="application/vnd.google-apps.folder"
+  }));
+}
+// resolve a folder's parent id (for the "Up" navigation). Returns "root" at top.
+async function gParent(folderId){
+  if(!folderId || folderId==="root") return null;
+  await gInit(); await gAuth({interactive:true});
+  try{ const m=await gapi.client.request({path:`/drive/v3/files/${folderId}`,params:{fields:"parents"}});
+    const p=m.result.parents; return (p&&p.length)?p[0]:"root"; }
+  catch(e){ return "root"; }
 }
 // get: download one file's content by id (token auth, no cookies)
 async function gGet(id){
@@ -201,7 +223,7 @@ async function msSave(name, content, itemId){
 }
 
 window.Cloud = {
-  google:{ configured:()=>!!C.GOOGLE_CLIENT_ID, list:gList, get:gGet, open:gOpen, save:gSave, signOut:gSignOut, signedIn:()=>!!(gToken && gTokenExp>Date.now()) },
+  google:{ configured:()=>!!C.GOOGLE_CLIENT_ID, list:gList, parent:gParent, get:gGet, open:gOpen, save:gSave, signOut:gSignOut, signedIn:()=>!!(gToken && gTokenExp>Date.now()) },
   onedrive:{ configured:()=>!!C.MS_CLIENT_ID, list:msList, get:msGet, save:msSave }
 };
 })();

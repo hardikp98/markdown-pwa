@@ -330,30 +330,39 @@ $("#fileInput").addEventListener("change",e=>{
 });
 
 /* ---------- open from clouds ---------- */
-async function openFromGoogle(){
-  // Use our own file list (Drive files.list) instead of the Google Picker.
-  // The Picker runs in an iframe that needs third-party cookies, which iOS
-  // Safari blocks ("Can't access your Google Account"). A direct list call
-  // uses the token we already hold, so it works on iPhone.
-  try{
-    toast("Loading Google Drive…");
-    const files=await Cloud.google.list();
-    if(!files.length){
-      alert("No markdown files visible yet.\n\nThis app sees only files it created or that you opened here before (Google 'drive.file' scope). New files you Save to Drive from this app will show up here.");
-      return;
-    }
-    const list=$("#docList");
-    list.innerHTML=`<div class="docItem" id="gBack">${ic.docs}<span>← Back</span></div>`+
-      files.map(f=>`<div class="docItem" data-gd="${f.id}"><span>${f.name}</span></div>`).join("");
-    $("#gBack").onclick=renderDocList;
-    list.querySelectorAll("[data-gd]").forEach(el=>el.onclick=async()=>{
-      try{ toast("Downloading…"); const f=await Cloud.google.get(el.dataset.gd);
-        adoptCloudDoc("gdrive",f.id,f.name,f.content); closeSheets(); $("#segEdit").click(); toast("Opened "+f.name); }
-      catch(e){ alert("Google Drive error:\n"+(e.message||e)); }
-    });
-  }
-  catch(e){ alert("Google Drive error:\n"+(e&&(e.message||e.error||JSON.stringify(e))||e)); }
+// Google Drive folder browser. No Picker (its iframe needs third-party cookies
+// that iOS blocks). We list folders + .md files in a folder using the token we
+// already hold, and let the user navigate in/up. "Documents" exits to the docs list.
+async function gBrowse(folderId, folderName){
+  const list=$("#docList");
+  toast("Loading Drive…");
+  let entries;
+  try{ entries=await Cloud.google.list(folderId); }
+  catch(e){ alert("Google Drive error:\n"+(e&&(e.message||e.error||JSON.stringify(e))||e)); return; }
+  const fid=folderId||"root";
+  const crumb = fid==="root" ? "My Drive" : (folderName||"Folder");
+  // header: Up (parent) when not at root, and always a Documents exit
+  let head=`<div class="gnav">`;
+  if(fid!=="root") head+=`<button class="docItem gNavBtn" id="gUp">${ic.docs}<span>↑ Up</span></button>`;
+  head+=`<button class="docItem gNavBtn" id="gDocs">${ic.menu}<span>Documents</span></button></div>`+
+        `<div class="sheetLabel">${crumb}</div>`;
+  const rows = entries.length
+    ? entries.map(f=> f.isFolder
+        ? `<div class="docItem" data-folder="${f.id}" data-name="${(f.name||"").replace(/"/g,"&quot;")}">${ic.docs}<span>${f.name}</span><span class="meta">folder ›</span></div>`
+        : `<div class="docItem" data-file="${f.id}"><span>${f.name}</span><span class="meta">.md</span></div>`
+      ).join("")
+    : `<div class="empty">No folders or markdown files here</div>`;
+  list.innerHTML = head + `<div class="sheetGroup">${rows}</div>`;
+  const up=$("#gUp"); if(up) up.onclick=async()=>{ const p=await Cloud.google.parent(fid); gBrowse(p, null); };
+  $("#gDocs").onclick=renderDocList;
+  list.querySelectorAll("[data-folder]").forEach(el=>el.onclick=()=>gBrowse(el.dataset.folder, el.dataset.name));
+  list.querySelectorAll("[data-file]").forEach(el=>el.onclick=async()=>{
+    try{ toast("Downloading…"); const f=await Cloud.google.get(el.dataset.file);
+      adoptCloudDoc("gdrive",f.id,f.name,f.content); closeSheets(); $("#segEdit").click(); toast("Opened "+f.name); }
+    catch(e){ alert("Google Drive error:\n"+(e.message||e)); }
+  });
 }
+async function openFromGoogle(){ gBrowse("root", null); }
 async function openFromOneDrive(){
   try{ toast("Loading OneDrive…"); const files=await Cloud.onedrive.list();
     if(!files.length){ alert("No .md files found in your OneDrive."); return; }
